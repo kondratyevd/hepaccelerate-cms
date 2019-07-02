@@ -654,6 +654,7 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leadi
            subarr, weights_dnn, dnn_mask,
            NUMPY_LIB.linspace(*hb)
         )
+
 def analyze_data(
     data,
     use_cuda=False,
@@ -666,6 +667,7 @@ def analyze_data(
     lepsf_id=None,
     lepsf_trig=None,
     dnn_model=None,
+    jetmet_corrections=None,
     parameters={},
     parameter_set_name="",
     doverify=False,
@@ -746,7 +748,29 @@ def analyze_data(
         parameters["jet_puid"],
         parameters["jet_btag"]
     )
-    
+    jets_rho = NUMPY_LIB.zeros_like(jets.pt)
+    ha.broadcast(scalars["fixedGridRhoFastjetAll"], jets.offsets, jets_rho)
+    if use_cuda:
+        pt = NUMPY_LIB.asnumpy(jets.pt)
+        eta = NUMPY_LIB.asnumpy(jets.eta)
+        rho = NUMPY_LIB.asnumpy(jets_rho)
+        area = NUMPY_LIB.asnumpy(jets.area)
+    else:
+        pt = jets.pt
+        eta = jets.eta
+        rho = jets_rho
+        area = jets.area
+
+    corr = jetmet_corrections.jec.getCorrection(JetPt=pt, Rho=rho, JetEta=eta, JetA=area)
+    resos = jetmet_corrections.jer.getResolution(JetEta=eta, Rho=rho, JetPt=pt)
+    resosfs = jetmet_corrections.jersf.getScaleFactor(JetEta=eta) 
+    jesunc = list(jetmet_corrections.jesunc.getUncertainty(JetPt=jets.pt, JetEta=jets.eta)) 
+  
+    corr = NUMPY_LIB.array(corr)
+    resos = NUMPY_LIB.array(resos)
+    resosfs = NUMPY_LIB.array(resosfs)
+    jesunc = NUMPY_LIB.array(jesunc)
+ 
     if doverify:
         z = ha.min_in_offsets(jets, jets.pt, ret_mu["selected_events"], ret_jet["selected_jets"])
         assert(NUMPY_LIB.all(z[z>0] > parameters["jet_pt"]))
@@ -1086,7 +1110,9 @@ def threaded_metrics(tokill, train_batches_queue):
 
     return
 
-def run_analysis(args, outpath, datasets, parameters, lumidata, lumimask, pu_corrections, rochester_corrections, lepsf_iso, lepsf_id, lepsf_trig, dnn_model):
+def run_analysis(args, outpath, datasets, parameters,
+    lumidata, lumimask, pu_corrections, rochester_corrections,
+    lepsf_iso, lepsf_id, lepsf_trig, dnn_model, jetmet_corrections):
     nev_total = 0
     nev_loaded = 0
     t0 = time.time()
@@ -1168,7 +1194,8 @@ def run_analysis(args, outpath, datasets, parameters, lumidata, lumimask, pu_cor
                     lepsf_id=lepsf_id,
                     lepsf_trig=lepsf_trig,
                     parameters=parameters,
-                    dnn_model=dnn_model) 
+                    dnn_model=dnn_model,
+                    jetmet_corrections=jetmet_corrections) 
                 rets += [ret]
                 processed_size_mb += memsize
                 nev_total += sum([md["numevents"] for md in ret["cache_metadata"]])
@@ -1222,6 +1249,7 @@ def create_datastructure(is_mc):
             ("Jet_btagDeepB", "float32"),
             ("Jet_qgl", "float32"),
             ("Jet_jetId", "int32"), ("Jet_puId", "int32"),
+            ("Jet_area", "float32"), ("Jet_rawFactor", "float32")
         ],
         "TrigObj": [
             ("TrigObj_pt", "float32"),
@@ -1245,7 +1273,8 @@ def create_datastructure(is_mc):
             ("run", "uint32"),
             ("luminosityBlock", "uint32"),
             ("event", "uint64"),
-            ("SoftActivityJetNjets5", "int32")
+            ("SoftActivityJetNjets5", "int32"),
+            ("fixedGridRhoFastjetAll", "float32")
         ],
     }
     if is_mc:
