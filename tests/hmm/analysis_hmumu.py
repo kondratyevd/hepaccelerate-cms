@@ -220,7 +220,8 @@ if __name__ == "__main__":
             
             "do_rochester_corrections": True,
             "do_lepton_sf": True,
-
+            
+            "do_jec": False, 
             "jet_mu_dr": 0.4,
             "jet_pt": 30.0,
             "jet_eta": 4.7,

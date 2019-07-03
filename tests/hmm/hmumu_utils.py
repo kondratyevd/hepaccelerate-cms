@@ -773,12 +773,11 @@ def analyze_data(
         weights["leptonsf"] = weights["nominal"] * sf_tot
 
     
-    #Jet energy corrections
-
     #change rho from per-event to per-jet using broadcasting
     jets_rho = NUMPY_LIB.zeros_like(jets.pt)
     ha.broadcast(scalars["fixedGridRhoFastjetAll"], jets.offsets, jets_rho)
-   
+    
+    pt_jec_jer_central = jets.pt
     raw_pt = jets.pt * (1.0 - jets.rawFactor)
     raw_mass = jets.mass * (1.0 - jets.rawFactor) 
     if use_cuda:
@@ -792,41 +791,44 @@ def analyze_data(
         rho = jets_rho
         area = jets.area
 
-    #compute and apply jet corrections
-    corr = jetmet_corrections.jec.getCorrection(JetPt=raw_pt, Rho=rho, JetEta=eta, JetA=area)
-    corr = NUMPY_LIB.array(corr)
-    pt_jec = NUMPY_LIB.array(raw_pt) * corr 
-    mass_jec = raw_mass * corr
-
-    resos = jetmet_corrections.jer.getResolution(JetEta=eta, Rho=rho, JetPt=NUMPY_LIB.asnumpy(pt_jec))
-    resosfs = jetmet_corrections.jersf.getScaleFactor(JetEta=eta) 
-    resos = NUMPY_LIB.array(resos)
-    resosfs = NUMPY_LIB.array(resosfs)
-    jer_smear = resos * NUMPY_LIB.random.normal(size=len(pt_jec))
-    jer_smear_central = 1 + NUMPY_LIB.sqrt(resosfs[:, 0]  ** 2 - 1.0) * jer_smear
-    jer_smear_up = 1 + NUMPY_LIB.sqrt(resosfs[:, 1]  ** 2 - 1.0) * jer_smear
-    jer_smear_down = 1 + NUMPY_LIB.sqrt(resosfs[:, 2]  ** 2 - 1.0) * jer_smear
-    pt_jec_jer_central = pt_jec * jer_smear_central
-    pt_jec_jer_up = pt_jec * jer_smear_up
-    pt_jec_jer_down = pt_jec * jer_smear_down
-    
-    jesunc = dict(list(jetmet_corrections.jesunc.getUncertainty(JetPt=NUMPY_LIB.array(pt_jec_jer_central), JetEta=jets.eta))) 
-
     #dictionary of jet systematic scenario name -> jet pt vector
     #the data vectors can be large, so it is possible to use a lambda function instead
     #which upon calling will return a jet pt vector
     jet_pt_syst = {
         ("raw", ""): NUMPY_LIB.array(raw_pt),
         ("nominal", ""): pt_jec_jer_central,
-        ("JER", "up"): pt_jec_jer_up,
-        ("JER", "down"): pt_jec_jer_down,
     }
 
-    #add variated jet momenta, but lazily to save GPU memory
-    for unc_name, arr in jesunc.items():
-        pt_jer = pt_jec_jer_central / corr
-        jet_pt_syst[(unc_name, "up")] = lambda pt_jer=pt_jer, name=unc_name: pt_jer * NUMPY_LIB.array(jesunc[name][:, 0])
-        jet_pt_syst[(unc_name, "down")] = lambda pt_jer=pt_jer, name=unc_name: pt_jer * NUMPY_LIB.array(jesunc[name][:, 1]) 
+    #Jet energy corrections
+    if parameters["do_jec"]:
+        #compute and apply jet corrections
+        corr = jetmet_corrections.jec.getCorrection(JetPt=raw_pt, Rho=rho, JetEta=eta, JetA=area)
+        corr = NUMPY_LIB.array(corr)
+        pt_jec = NUMPY_LIB.array(raw_pt) * corr 
+        mass_jec = raw_mass * corr
+
+        resos = jetmet_corrections.jer.getResolution(JetEta=eta, Rho=rho, JetPt=NUMPY_LIB.asnumpy(pt_jec))
+        resosfs = jetmet_corrections.jersf.getScaleFactor(JetEta=eta) 
+        resos = NUMPY_LIB.array(resos)
+        resosfs = NUMPY_LIB.array(resosfs)
+        jer_smear = resos * NUMPY_LIB.random.normal(size=len(pt_jec))
+        jer_smear_central = 1 + NUMPY_LIB.sqrt(resosfs[:, 0]  ** 2 - 1.0) * jer_smear
+        jer_smear_up = 1 + NUMPY_LIB.sqrt(resosfs[:, 1]  ** 2 - 1.0) * jer_smear
+        jer_smear_down = 1 + NUMPY_LIB.sqrt(resosfs[:, 2]  ** 2 - 1.0) * jer_smear
+        pt_jec_jer_central = pt_jec * jer_smear_central
+        pt_jec_jer_up = pt_jec * jer_smear_up
+        pt_jec_jer_down = pt_jec * jer_smear_down
+        
+        jesunc = dict(list(jetmet_corrections.jesunc.getUncertainty(JetPt=NUMPY_LIB.array(pt_jec_jer_central), JetEta=jets.eta))) 
+
+        jet_pt_syst[("JER", "up")] = pt_jec_jer_up
+        jet_pt_syst[("JER", "down")] = pt_jec_jer_down
+
+        #add variated jet momenta, but lazily to save GPU memory
+        for unc_name, arr in jesunc.items():
+            pt_jer = pt_jec_jer_central / corr
+            jet_pt_syst[(unc_name, "up")] = lambda pt_jer=pt_jer, name=unc_name: pt_jer * NUMPY_LIB.array(jesunc[name][:, 0])
+            jet_pt_syst[(unc_name, "down")] = lambda pt_jer=pt_jer, name=unc_name: pt_jer * NUMPY_LIB.array(jesunc[name][:, 1]) 
 
     for jet_syst_name, jet_pt_vec in jet_pt_syst.items():
         if callable(jet_pt_vec):
