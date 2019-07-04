@@ -6,7 +6,7 @@
 CMS-specific accelerated analysis code based on the [hepaccelerate](https://github.com/jpata/hepaccelerate) library.
 
 ~~~
-#Install this package
+#Installation
 pip3 install --user awkward uproot numba
 git clone https://github.com/jpata/hepaccelerate-cms.git
 cd hepaccelerate-cms
@@ -29,3 +29,5 @@ PYTHONPATH=hepaccelerate:coffea:. python3 cmsutils/plotting.py
 ~~~
 
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
+
+A prebuilt singularity image with the GPU libraries is also provided: [link](http://login-1.hep.caltech.edu/~jpata/cupy.simg)
