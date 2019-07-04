@@ -95,7 +95,7 @@ from coffea.jetmet_tools import JetCorrectionUncertainty
 from coffea.jetmet_tools import JetResolutionScaleFactor
 
 class JetMetCorrections:
-    def __init__(self):
+    def __init__(self, do_factorized_jec_unc=False):
         extract = extractor()
         
         extract.add_weight_sets(['* * coffea/tests/samples/Summer16_23Sep2016V3_MC_L1FastJet_AK4PFPuppi.jec.txt.gz',
@@ -136,11 +136,12 @@ class JetMetCorrections:
         #print(list(resosfs))
         
         junc_names = ['Summer16_23Sep2016V3_MC_Uncertainty_AK4PFPuppi']
-        levels = []
-        for name in dir(evaluator):
-            if 'Summer16_23Sep2016V3_MC_UncertaintySources_AK4PFPuppi' in name:
-                junc_names.append(name)
-                levels.append(name.split('_')[-1])
+        #levels = []
+        if do_factorized_jec_unc:
+            for name in dir(evaluator):
+                if 'Summer16_23Sep2016V3_MC_UncertaintySources_AK4PFPuppi' in name:
+                    junc_names.append(name)
+                    #levels.append(name.split('_')[-1])
         self.jesunc = JetCorrectionUncertainty(**{name: evaluator[name] for name in junc_names})
         #juncs = junc.getUncertainty(JetEta=test_eta, JetPt=test_pt)
         #juncs = list(juncs)
@@ -221,7 +222,7 @@ if __name__ == "__main__":
             "do_rochester_corrections": True,
             "do_lepton_sf": True,
             
-            "do_jec": False, 
+            "do_jec": True, 
             "jet_mu_dr": 0.4,
             "jet_pt": 30.0,
             "jet_eta": 4.7,
