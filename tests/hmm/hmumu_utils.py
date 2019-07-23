@@ -29,6 +29,8 @@ from cmsutils.plotting import plot_hist_step
 from cmsutils.decisiontree import DecisionTreeNode, DecisionTreeLeaf, make_random_node, grow_randomly, make_random_tree, prune_randomly, generate_cut_trees
 from cmsutils.stats import likelihood, sig_q0_asimov, sig_naive
 
+from pars import runmap_numerical, runmap_numerical_r, data_runs
+
 #global variables need to be configured here for the hepaccelerate backend and numpy library
 ha = None
 NUMPY_LIB = None
@@ -39,48 +41,6 @@ genweight_scalefactor = 1e-5
 #Use these to turn on debugging
 debug = False
 debug_event_ids = []
-
-data_runs = {
-    "2017": [
-        (294927, 297019, "RunA"),
-        (297020, 299329, "RunB"),
-        (299337, 302029, "RunC"),
-        (302030, 303434, "RunD"),
-        (303435, 304826, "RunE"),
-        (304911, 306462, "RunF")
-    ],
-
-    "2016": [
-        (272007, 275376, "RunB"),  
-        (275657, 276283, "RunC"),  
-        (276315, 276811, "RunD"),  
-        (276831, 277420, "RunE"),  
-        (277772, 278808, "RunF"),  
-        (278820, 280385, "RunG"),  
-        (280919, 284044, "RunH"),  
-    ],
-
-    "2018": [
-        (315252, 316995, "RunA"),
-        (316998, 319312, "RunB"),
-        (319313, 320393, "RunC"),
-        (320394, 325273, "RunD"),
-        (325274, 325765, "RunE"),
-    ]
-}
-
-runmap_numerical = {
-    "RunA": 0,
-    "RunB": 1,
-    "RunC": 2,
-    "RunD": 3,
-    "RunE": 4,
-    "RunF": 5,
-    "RunG": 6,
-    "RunH": 7,
-}
-
-runmap_numerical_r = {v: k for k, v in runmap_numerical.items()}
 
 def analyze_data(
     data,
