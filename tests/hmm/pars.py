@@ -101,14 +101,14 @@ catnames = {
     "dimuon_invmass_h_peak": "dimuons, H SR",
     "dimuon_invmass_h_sideband": "dimuons, H SB",
 
-    "dnn_presel": "dimuons, $\ge 2$ jets",
+    "dnn_presel": r"dimuons, $\geq 2$ jets",
     "dimuon": "dimuons",
 }
 varnames = {
     "subleadingJet_pt": "subleading jet $p_T$ [GeV]",
     "subleadingJet_eta": "subleading jet $\eta$",
-    "leadingJet_pt": "subleading jet $p_T$ [GeV]",
-    "leadingJet_eta": "subleading jet $\eta$",
+    "leadingJet_pt": "leading jet $p_T$ [GeV]",
+    "leadingJet_eta": "leading jet $\eta$",
 }
 
 analysis_names = {

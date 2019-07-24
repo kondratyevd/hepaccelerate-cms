@@ -34,13 +34,13 @@ function run_code_smallsamples() {
 #run_code vbf
 #run_code dy_m105_160_vbf_amc
 
-#run_code_smallsamples
-#run_code data
-#run_code dy
-#run_code dy_0j
-#run_code dy_1j
-#run_code dy_2j
-#run_code dy_m105_160_amc
+run_code_smallsamples
+run_code data
+run_code dy
+run_code dy_0j
+run_code dy_1j
+run_code dy_2j
+run_code dy_m105_160_amc
 run_code dy_m105_160_vbf_amc
 run_code ttjets_dl
 run_code ttjets_sl
