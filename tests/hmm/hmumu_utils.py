@@ -1489,7 +1489,7 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leadi
     weights_dnn = {k: w[dnn_presel] for k, w in weights.items()}
     hists["hist__dnn_presel__dnn_pred"] = fill_with_weights(
        dnn_pred, weights_dnn, dnn_mask,
-       NUMPY_LIB.linspace(*parameters["dnn_input_histogram_bins"])
+       NUMPY_LIB.linspace(*parameters["dnn_input_histogram_bins"]["dnn_pred"])
     )
 
     for vn in parameters["dnn_varlist_order"]:
