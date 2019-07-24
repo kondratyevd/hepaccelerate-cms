@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import copy
+import multiprocessing
 
 def histstep(ax, edges, contents, **kwargs):
     ymins = []
@@ -418,6 +419,7 @@ def make_pdf_plot(args):
 
 if __name__ == "__main__":
 
+    pool = multiprocessing.Pool(12)
     #in picobarns
     #from https://docs.google.com/presentation/d/1OMnGnSs8TIiPPVOEKV8EbWS8YBgEsoMH0r0Js5v5tIQ/edit#slide=id.g3f663e4489_0_20
     cross_sections = {
@@ -566,4 +568,4 @@ if __name__ == "__main__":
                         print("Histogram {0} not found for data, skipping".format(var))
                         continue
                     datacard_args += [(res, hdata, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir)]
-        ret = list(map(make_pdf_plot, datacard_args))
+        ret = list(pool.map(make_pdf_plot, datacard_args))

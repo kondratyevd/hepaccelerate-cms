@@ -88,3 +88,6 @@ runmap_numerical = {
 
 #reversed runmap
 runmap_numerical_r = {v: k for k, v in runmap_numerical.items()}
+
+#Used to scale the genweight to prevent a numerical overflow
+genweight_scalefactor = 1e-5

@@ -11,19 +11,20 @@ export NUMBA_ENABLE_AVX=1
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS 
 export SINGULARITY_IMAGE=/bigdata/shared/Software/singularity/gpuservers/singularity/images/cupy.simg
+export MAXFILES=-1
 
 function run_code() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
-        tests/hmm/analysis_hmumu.py --action analyze --maxfiles -1 --chunksize 2 \
+        tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 4 \
         --cache-location /nvme1/jpata/cache --datapath /storage/user/jpata/ \
-        --pinned --async-data --nthreads $NTHREADS --era 2018 --out out2 --dataset $1
+        --pinned --async-data --nthreads $NTHREADS --era 2016 --era 2017 --era 2018 --out out2 --dataset $1
 }
 
 function run_code_smallsamples() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
-        tests/hmm/analysis_hmumu.py --action analyze --maxfiles -1 --chunksize 2 \
+        tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 2 \
         --cache-location /nvme1/jpata/cache --datapath /storage/user/jpata/ \
-        --pinned --async-data --nthreads $NTHREADS --era 2018 --out out2 \
+        --pinned --async-data --nthreads $NTHREADS --era 2016 --era 2017 --era 2018 --out out2 \
         --dataset ggh --dataset vbf --dataset ttw --dataset ttz \
         --dataset st_t_top --dataset st_t_antitop --dataset st_tw_antitop --dataset st_tw_top \
         --dataset zz --dataset wmh --dataset wph --dataset zh \
@@ -35,7 +36,7 @@ function run_code_smallsamples() {
 
 run_code_smallsamples
 run_code data
-run_code dy
+#run_code dy
 run_code dy_0j
 run_code dy_1j
 run_code dy_2j

@@ -25,18 +25,15 @@ from hepaccelerate.utils import Results
 from hepaccelerate.utils import Dataset
 from hepaccelerate.utils import Histogram
 import hepaccelerate.backend_cpu as backend_cpu
-from cmsutils.plotting import plot_hist_step
+
 from cmsutils.decisiontree import DecisionTreeNode, DecisionTreeLeaf, make_random_node, grow_randomly, make_random_tree, prune_randomly, generate_cut_trees
 from cmsutils.stats import likelihood, sig_q0_asimov, sig_naive
 
-from pars import runmap_numerical, runmap_numerical_r, data_runs
+from pars import runmap_numerical, runmap_numerical_r, data_runs, genweight_scalefactor
 
 #global variables need to be configured here for the hepaccelerate backend and numpy library
 ha = None
 NUMPY_LIB = None
-
-#Used to scale the genweight to prevent a numerical overflow
-genweight_scalefactor = 1e-5
 
 #Use these to turn on debugging
 debug = False
@@ -69,8 +66,21 @@ def analyze_data(
     electrons = data["Electron"]
     trigobj = data["TrigObj"]
     scalars = data["eventvars"]
-
-
+    
+    mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
+    
+    #Compute integrated luminosity on data sample and apply golden JSON
+    int_lumi = 0
+    if not is_mc:
+        runs = NUMPY_LIB.asnumpy(scalars["run"])
+        lumis = NUMPY_LIB.asnumpy(scalars["luminosityBlock"])
+        if not (lumimask is None):
+           #keep events passing golden JSON
+           mask_lumi_golden_json = np.invert(lumimask[dataset_era](runs, lumis))
+           mask_events = mask_events & NUMPY_LIB.array(mask_lumi_golden_json) 
+           #get integrated luminosity in this file
+           if not (lumidata is None):
+               int_lumi = get_int_lumi(runs, lumis, mask_lumi_golden_json, lumidata[dataset_era])
     check_and_fix_qgl(jets)
 
     #output histograms 
@@ -115,25 +125,7 @@ def analyze_data(
     # scalars["luminosityBlock"] = NUMPY_LIB.array(scalars["run"], dtype=NUMPY_LIB.uint32)
 
     #Get the mask of events that pass trigger selection
-    mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
     mask_events = select_events_trigger(scalars, parameters, mask_events, parameters["hlt_bits"][dataset_era])
-
-
-    #Compute integrated luminosity on data sample and apply golden JSON
-    int_lumi = 0
-    if not is_mc:
-        runs = NUMPY_LIB.asnumpy(scalars["run"])
-        lumis = NUMPY_LIB.asnumpy(scalars["luminosityBlock"])
-        mask_lumi_golden_json = NUMPY_LIB.array(lumimask[dataset_era](runs, lumis))
-        #print("Number of events pre-json: {0}".format(mask_events.sum()))
-        mask_events = mask_events & mask_lumi_golden_json
-        #print("Number of events post-json: {0}".format(mask_events.sum()))
-        if not is_mc and not (lumimask is None):
-            if parameter_set_name == "baseline":
-                mask_events = mask_events & mask_lumi_golden_json
-                #get integrated luminosity in this file
-                if not (lumidata is None):
-                    int_lumi = get_int_lumi(runs, lumis, NUMPY_LIB.asnumpy(mask_lumi_golden_json), lumidata[dataset_era])
 
     #Compute event weights
     weights = {}
@@ -217,14 +209,13 @@ def analyze_data(
     
     # Get the invariant mass of the dimuon system and compute mass windows
     inv_mass = compute_inv_mass(muons, ret_mu["selected_events"], ret_mu["selected_muons"])
-    #FIXME: check this
     inv_mass[NUMPY_LIB.isnan(inv_mass)] = 0
     inv_mass[NUMPY_LIB.isinf(inv_mass)] = 0
 
-    masswindow_70_110 = ((inv_mass >= 70) & (inv_mass < 110))
-    masswindow_110_150 = ((inv_mass >= 110) & (inv_mass < 150))
-    masswindow_120_130 = ((inv_mass >= 120) & (inv_mass < 130))
-    masswindow_exclude_120_130 = masswindow_110_150 & (NUMPY_LIB.invert((inv_mass >= 120) & (inv_mass <= 130)))
+    masswindow_z_peak = ((inv_mass >= parameters["masswindow_z_peak"][0]) & (inv_mass < parameters["masswindow_z_peak"][1]))
+    masswindow_h_region = ((inv_mass >= parameters["masswindow_h_region"][0]) & (inv_mass < parameters["masswindow_h_region"][1]))
+    masswindow_h_peak = ((inv_mass >= parameters["masswindow_h_peak"][0]) & (inv_mass < parameters["masswindow_h_peak"][1]))
+    masswindow_h_sideband = masswindow_h_region & NUMPY_LIB.invert(masswindow_h_peak)
 
     #get the number of additional muons (not OS) that pass ID and iso cuts
     n_additional_muons = ha.sum_in_offsets(muons, ret_mu["additional_muon_sel"], ret_mu["selected_events"], ret_mu["additional_muon_sel"], dtype=NUMPY_LIB.int8)
@@ -234,7 +225,7 @@ def analyze_data(
     fill_muon_hists(
         hists, scalars, weights, ret_mu, inv_mass,
         leading_muon, subleading_muon, parameters,
-        masswindow_110_150, masswindow_120_130, NUMPY_LIB)
+        masswindow_z_peak, NUMPY_LIB)
 
     #Apply JEC, create a dictionary of variated jet momenta
     jet_pt_syst = apply_jec(jets, scalars, parameters, jetmet_corrections[dataset_era][parameters["jec_tag"][dataset_era]], NUMPY_LIB, use_cuda, is_mc)
@@ -313,9 +304,9 @@ def analyze_data(
         #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
         hists_dnn = {}
         dnn_prediction = None
-        #dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model,
-        #   scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
-        #   weights_selected, hists_dnn)
+        dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model,
+           scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
+           weights_selected, hists_dnn)
 
         #Assign the final analysis discriminator based on category
         scalars["final_discriminator"] = NUMPY_LIB.zeros_like(inv_mass)
@@ -330,7 +321,6 @@ def analyze_data(
             dnn_vars["run"] = scalars["run"][dnn_presel]
             dnn_vars["lumi"] = scalars["luminosityBlock"][dnn_presel]
             dnn_vars["event"] = scalars["event"][dnn_presel]
-            dnn_vars["Higgs_mass"] = inv_mass[dnn_presel]
             dnn_vars["dnn_pred"] = dnn_prediction
 
             #Save the DNN training ntuples as npy files
@@ -423,10 +413,9 @@ def analyze_data(
 
         #Save histograms for numerical categories (cat5 only right now) and all mass bins
         for massbin_name, massbin_msk, mass_edges in [
-                #("all", ret_mu["selected_events"]), 
-                #("110_150", masswindow_110_150, (110, 150)),
-                #("120_130", masswindow_120_130, (120, 130)),
-                ("70_110", masswindow_70_110, (70, 110))]:
+                ("h_peak", masswindow_h_peak, parameters["masswindow_h_peak"]),
+                ("h_sideband", masswindow_h_sideband, parameters["masswindow_h_region"]),
+                ("z_peak", masswindow_z_peak, parameters["masswindow_z_peak"])]:
 
             update_histograms_systematic(
                 hists,
@@ -635,8 +624,8 @@ def run_analysis(
         print("Processing dataset {0}_{1}".format(datasetname, dataset_era))
         if maxfiles[dataset_era] > 0:
             mf = maxfiles[dataset_era]
-            if datasetname == "data":
-                mf = 10*mf
+            #if datasetname == "data":
+            #    mf = 10*mf
             filenames_all = filenames_all[:mf]
 
         datastructure = create_datastructure(is_mc, dataset_era)
@@ -716,6 +705,7 @@ def run_analysis(
 
             #save output
             ret = sum(rets, Results({}))
+            print("luminosities", [r["baseline"]["int_lumi"] for r in rets])
             if is_mc:
                 ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
                 ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
@@ -1446,6 +1436,7 @@ def dnn_variables(leading_muon, subleading_muon, leading_jet, subleading_jet, ns
         "softJet5": nsoft,
         "Higgs_pt": mm_sph["pt"],
         "Higgs_eta": mm_sph["eta"],
+        "Higgs_mass": mm_sph["mass"],
     }
 
     if debug:
@@ -1498,7 +1489,7 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leadi
     weights_dnn = {k: w[dnn_presel] for k, w in weights.items()}
     hists["hist__dnn_presel__dnn_pred"] = fill_with_weights(
        dnn_pred, weights_dnn, dnn_mask,
-       NUMPY_LIB.linspace(0.0, 1.0, 30)
+       NUMPY_LIB.linspace(*parameters["dnn_input_histogram_bins"])
     )
 
     for vn in parameters["dnn_varlist_order"]:
@@ -1691,7 +1682,7 @@ def apply_jec(jets, scalars, parameters, jetmet_corrections, NUMPY_LIB, use_cuda
 
 def fill_muon_hists(hists, scalars, weights, ret_mu, inv_mass,
     leading_muon, subleading_muon, parameters,
-    masswindow_110_150, masswindow_120_130, NUMPY_LIB):
+    masswindow, NUMPY_LIB):
 
     hists["hist__dimuon__inv_mass"] = fill_with_weights(
         inv_mass, weights,
@@ -1709,16 +1700,6 @@ def fill_muon_hists(hists, scalars, weights, ret_mu, inv_mass,
     hists["hist__dimuon__subleading_muon_eta"] = fill_with_weights(
         subleading_muon["eta"], weights, ret_mu["selected_events"],
         NUMPY_LIB.linspace(-4.0, 4.0, 101)
-    )
-
-    hists["hist__dimuon_invmass_110_150__inv_mass"] = fill_with_weights(
-       inv_mass, weights, ret_mu["selected_events"] & masswindow_110_150,
-       NUMPY_LIB.linspace(110, 150, parameters["inv_mass_bins"])
-    )
-
-    hists["hist__dimuon_invmass_120_130__inv_mass"] = fill_with_weights(
-       inv_mass, weights, ret_mu["selected_events"] & masswindow_120_130,
-       NUMPY_LIB.linspace(120, 130, parameters["inv_mass_bins"])
     )
 
 def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_trig, use_cuda, dataset_era, NUMPY_LIB, debug):

@@ -294,7 +294,7 @@ if __name__ == "__main__":
 
     # Do you want to use yappi to profile the python code
     do_prof = False
-    do_tensorflow = False
+    do_tensorflow = True
 
     args = parse_args()
 
@@ -394,7 +394,7 @@ if __name__ == "__main__":
             "do_lepton_sf": True,
             
             "do_jec": True,
-            "jec_tag": {"2016": "Summer16_23Sep2016V4", "2017": "Fall17_17Nov2017_V6", "2018": "Autumn18_V8"}, 
+            "jec_tag": {"2016": "Summer16_23Sep2016V4", "2017": "Fall17_17Nov2017_V6", "2018": "Autumn18_V16"}, 
             "jet_mu_dr": 0.4,
             "jet_pt_leading": {"2016": 25.0, "2017": 30.0, "2018": 30.0},
             "jet_pt_subleading": {"2016": 25.0, "2017": 30.0, "2018": 30.0},
@@ -404,6 +404,9 @@ if __name__ == "__main__":
             "jet_btag": {"2016": 0.6321, "2017": 0.4941, "2018": 0.4184},
 
             "cat5_dijet_inv_mass": 400.0,
+            "masswindow_z_peak": [76, 106],
+            "masswindow_h_region": [110, 150],
+            "masswindow_h_peak": [115, 135],
 
             "inv_mass_bins": 41,
 
@@ -412,7 +415,7 @@ if __name__ == "__main__":
             "extra_electrons_iso": 0.4,
             "extra_electrons_id": "mvaFall17V1Iso_WP90",
 
-            "save_dnn_vars": False,
+            "save_dnn_vars": True,
             "dnn_vars_path": "{0}/dnn_vars".format(args.cache_location),
 
             #If true, apply mjj > cut, otherwise inverse
@@ -425,7 +428,7 @@ if __name__ == "__main__":
             },
 
             #Irene's DNN input variable order for keras
-            "dnn_varlist_order": ['softJet5', 'dRmm', 'dEtamm', 'dPhimm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'Zep', 'dRmin_mj', 'dRmax_mj', 'dRmin_mmj', 'dRmax_mmj', 'leadingJet_pt', 'subleadingJet_pt', 'leadingJet_eta', 'subleadingJet_eta', 'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS', 'Higgs_pt', 'Higgs_eta'],
+            "dnn_varlist_order": ['softJet5', 'dRmm','dEtamm','M_jj','pt_jj','eta_jj','phi_jj','M_mmjj','eta_mmjj','phi_mmjj','dEta_jj','Zep','dRmin_mj', 'dRmax_mj', 'dRmin_mmj','dRmax_mmj','dPhimm','leadingJet_pt','subleadingJet_pt', 'leadingJet_eta','subleadingJet_eta','leadingJet_qgl','subleadingJet_qgl','cthetaCS','Higgs_pt','Higgs_eta','Higgs_mass'],
             "dnn_input_histogram_bins": {
                 "softJet5": (0,10,10),
                 "dRmm": (0,5,20),
@@ -453,13 +456,15 @@ if __name__ == "__main__":
                 "cthetaCS": (-1, 1, 20),
                 "Higgs_pt": (0, 200, 20),
                 "Higgs_eta": (-3, 3, 20),
+                "Higgs_mass": (110, 150, 20),
+                "dnn_pred": (-1, 1, 20),
             },
 
             "categorization_trees": {}
         },
     }
-    analysis_parameters["redo_jec_V16"] = copy.deepcopy(analysis_parameters["baseline"])
-    analysis_parameters["redo_jec_V16"]["jec_tag"]["2018"] = "Autumn18_V16"
+    #analysis_parameters["redo_jec_V16"] = copy.deepcopy(analysis_parameters["baseline"])
+    #analysis_parameters["redo_jec_V16"]["jec_tag"]["2018"] = "Autumn18_V16"
 
     lumimask = {
         "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
@@ -634,7 +639,7 @@ if __name__ == "__main__":
         
         #load DNN model
         import keras
-        dnn_model = keras.models.load_model("data/dnn_model.h5")
+        dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYvbf_23July2019.h5")
 
     run_analysis(args, outpath, datasets, analysis_parameters,
         {k: args.chunksize*v for k, v in chunksizes_mult.items()},
