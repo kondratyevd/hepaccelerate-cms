@@ -454,14 +454,14 @@ if __name__ == "__main__":
         "vbf",
         #"wz_1l1nu2q",
         "wz_3lnu",
-       "ww_2l2nu", "wz_2l2q", "zz",
-       "ewk_lljj_mll105_160",
-       #"st_top",
-       #"st_t_antitop",
-       "st_tw_top",
-       "st_tw_antitop",
-       "ttjets_sl", "ttjets_dl",
-       "dy_m105_160_amc", "dy_m105_160_vbf_amc",
+        "ww_2l2nu", "wz_2l2q", "zz",
+        "ewk_lljj_mll105_160",
+        #"st_top",
+        #"st_t_antitop",
+        "st_tw_top",
+        "st_tw_antitop",
+        "ttjets_sl", "ttjets_dl",
+        "dy_m105_160_amc", "dy_m105_160_vbf_amc",
     ]
 
     mc_samples_combine_Z = [
@@ -469,13 +469,13 @@ if __name__ == "__main__":
         "vbf",
         #"wz_1l1nu2q",
         "wz_3lnu", 
-       "ww_2l2nu", "wz_2l2q", "zz",
-       "ewk_lljj_mll105_160",
+        "ww_2l2nu", "wz_2l2q", "zz",
+        "ewk_lljj_mll105_160",
         #"st_top",
         #"st_t_antitop",
-       "st_tw_top",
-       "st_tw_antitop",
-       "ttjets_sl", "ttjets_dl",
+        "st_tw_top",
+        "st_tw_antitop",
+        "ttjets_sl", "ttjets_dl",
         "dy_0j", "dy_1j", "dy_2j",
     ]
     mc_samples_load = list(set(mc_samples_combine_H + mc_samples_combine_Z))
@@ -503,7 +503,7 @@ if __name__ == "__main__":
 
 
     #for era in ["2016", "2017", "2018"]:
-    for era in ["2018"]:
+    for era in ["2016", "2017", "2018"]:
         res = {}
         genweights = {}
         weight_xs = {}
@@ -542,7 +542,7 @@ if __name__ == "__main__":
             for var in histnames:
                 if var in ["hist_puweight", "hist__dijet_inv_mass_gen"]:
                     continue
-                if "110_150" in var:
+                if ("h_peak" in var) or ("h_sideband" in var):
                     mc_samples = mc_samples_combine_H
                 else:
                     mc_samples = mc_samples_combine_Z
