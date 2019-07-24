@@ -20,7 +20,7 @@ categories = {
     }
 }
 
-cross_sections: {
+cross_sections = {
     "dy": 5765.4,
     "dy_0j": 4620.52,
     "dy_1j": 859.59,
@@ -42,7 +42,7 @@ cross_sections: {
     "st_t_antitop": 80.95,
     "st_tw_top": 35.85,
     "st_tw_antitop": 35.85,
-    "ewk_lljj_mll105_160": 0.0508896,
+    "ewk_lljj_mll105_160": 0.0508896, 
 }
 
 data_runs = {
@@ -91,3 +91,27 @@ runmap_numerical_r = {v: k for k, v in runmap_numerical.items()}
 
 #Used to scale the genweight to prevent a numerical overflow
 genweight_scalefactor = 1e-5
+
+catnames = {
+    "dimuon_invmass_z_peak_cat5": "dimuons, Z region, cat 5",
+    "dimuon_invmass_h_peak_cat5": "dimuons, H SR, cat 5",
+    "dimuon_invmass_h_sideband_cat5": "dimuons, H SB, cat 5",
+
+    "dimuon_invmass_z_peak": "dimuons, Z region",
+    "dimuon_invmass_h_peak": "dimuons, H SR",
+    "dimuon_invmass_h_sideband": "dimuons, H SB",
+
+    "dnn_presel": "dimuons, $\ge 2$ jets",
+    "dimuon": "dimuons",
+}
+varnames = {
+    "subleadingJet_pt": "subleading jet $p_T$ [GeV]",
+    "subleadingJet_eta": "subleading jet $\eta$",
+    "leadingJet_pt": "subleading jet $p_T$ [GeV]",
+    "leadingJet_eta": "subleading jet $\eta$",
+}
+
+analysis_names = {
+    "baseline": "JEC V8",
+    "redo_jec_V16": "JEC V16"
+}

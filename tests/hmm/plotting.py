@@ -6,11 +6,172 @@ from collections import OrderedDict
 import uproot
 
 import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 import copy
 import multiprocessing
+
+from pars import catnames, varnames, analysis_names
+from scipy.stats import wasserstein_distance
+
+def assign_plot_title_label(histname):
+    spl = histname.split("__")
+    varname_nice = "UNKNOWN"
+    catname_nice = "UNKNOWN"
+    print(spl)
+    if len(spl) == 3:
+        catname = spl[1]
+        varname = spl[2]
+        catname_nice = catnames[catname]
+        if varname in varnames:
+            varname_nice = varnames[varname]
+        else:
+            varname_nice = varname
+            print("WARNING: please define {0} in pars.py".format(varname))
+            
+    return varname_nice, catname_nice
+             
+def plot_hist_ratio(hists_mc, hist_data,
+        total_err_stat=None,
+        total_err_stat_syst=None,
+        figure=None):
+    if not figure:
+        figure = plt.figure(figsize=(5,5), dpi=100)
+
+    ax1 = plt.axes([0.0, 0.23, 1.0, 0.8])
+       
+    hmc_tot = np.zeros_like(hist_data.contents)
+    hmc_tot2 = np.zeros_like(hist_data.contents)
+    for h in hists_mc:
+        plot_hist_step(ax1, h.edges, hmc_tot + h.contents,
+            np.sqrt(hmc_tot2 + h.contents_w2),
+            kwargs_step={"label": getattr(h, "label", None)}
+        )
+        hmc_tot += h.contents
+        hmc_tot2 += h.contents_w2
+#    plot_hist_step(h["edges"], hmc_tot, np.sqrt(hmc_tot2), kwargs_step={"color": "gray", "label": None})
+    ax1.errorbar(
+        midpoints(hist_data.edges), hist_data.contents,
+        np.sqrt(hist_data.contents_w2), marker=".", lw=0,
+        elinewidth=1.0, color="black", ms=3, label=getattr(hist_data, "label", None))
+    
+    if not (total_err_stat_syst is None):
+        histstep(ax1, hist_data.edges, hmc_tot + total_err_stat_syst, color="blue", linewidth=1)
+        histstep(ax1, hist_data.edges, hmc_tot - total_err_stat_syst, color="blue", linewidth=1)
+    
+    if not (total_err_stat is None):
+        histstep(ax1, hist_data.edges, hmc_tot + total_err_stat, color="black", linewidth=1, linestyle="--")
+        histstep(ax1, hist_data.edges, hmc_tot - total_err_stat, color="black", linewidth=1, linestyle="--")
+
+        
+    ax1.set_yscale("log")
+    ax1.set_ylim(1e-2, 100*np.max(hist_data.contents))
+    
+    #ax1.get_yticklabels()[-1].remove()
+    
+    ax2 = plt.axes([0.0, 0.0, 1.0, 0.16], sharex=ax1)
+
+    ratio = hist_data.contents / hmc_tot
+    ratio_err = np.sqrt(hist_data.contents_w2) /hmc_tot
+    ratio[np.isnan(ratio)] = 0
+
+    plt.errorbar(midpoints(hist_data.edges), ratio, ratio_err, marker=".", lw=0, elinewidth=1, ms=3, color="black")
+
+    if not (total_err_stat_syst is None):
+        ratio_up = (hmc_tot + total_err_stat_syst) / hmc_tot
+        ratio_down = (hmc_tot - total_err_stat_syst) / hmc_tot
+        ratio_down[np.isnan(ratio_down)] = 1
+        ratio_down[np.isnan(ratio_up)] = 1
+        histstep(ax2, hist_data.edges, ratio_up, color="blue", linewidth=1, linestyle="--")
+        histstep(ax2, hist_data.edges, ratio_down, color="blue", linewidth=1, linestyle="--")
+
+    if not (total_err_stat is None):
+        ratio_up = (hmc_tot + total_err_stat) / hmc_tot
+        ratio_down = (hmc_tot - total_err_stat) / hmc_tot
+        ratio_down[np.isnan(ratio_down)] = 1
+        ratio_down[np.isnan(ratio_up)] = 1
+        histstep(ax2, hist_data.edges, ratio_up, color="gray", linewidth=1, linestyle="--")
+        histstep(ax2, hist_data.edges, ratio_down, color="gray", linewidth=1, linestyle="--")
+
+                
+    plt.ylim(0.5, 1.5)
+    plt.axhline(1.0, color="black")
+    
+    return ax1, ax2
+
+def make_pdf_plot(args):
+    res, hd, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir, datataking_year = args
+
+    hist_template = copy.deepcopy(hd)
+    hist_template.contents[:] = 0
+    hist_template.contents_w2[:] = 0
+    
+    uncertainties = ["jes", "puWeight"]
+    
+    hmc = []
+    
+    for mc_samp in mc_samples:
+        h = load_hist(res[mc_samp][analysis][var][weight])
+        h = h * weight_xs[mc_samp]
+        h.label = "{0} ({1:.1E})".format(mc_samp, np.sum(h.contents))
+                
+        hmc += [h]
+    
+    htot_nominal = sum(hmc, hist_template)
+    htot_variated = {}
+    hdelta_quadrature = np.zeros_like(hist_template.contents)
+    
+    for sdir in ["__up", "__down"]:
+        for unc in uncertainties:
+            if (unc + sdir) in res[mc_samp][analysis][var]:
+                htot_variated[unc + sdir] = sum([
+                    load_hist(res[mc_samp][analysis][var][unc + sdir])* weight_xs[mc_samp] for mc_samp in mc_samples
+                ], hist_template)
+                hdelta_quadrature += (htot_nominal.contents - htot_variated[unc+sdir].contents)**2
+            
+    hdelta_quadrature_stat = np.sqrt(htot_nominal.contents_w2)
+    hdelta_quadrature_stat_syst = np.sqrt(hdelta_quadrature_stat**2 + hdelta_quadrature)
+    hd.label = "data ({0:.1E})".format(np.sum(hd.contents))
+
+    if var == "hist_inv_mass_d":
+        mask_inv_mass(hd)
+    #    hd.contents[0] = 0
+    #    hd.contents_w2[0] = 0
+
+    plt.figure(figsize=(4,4))
+    a1, a2 = plot_hist_ratio(hmc, hd,
+        total_err_stat=hdelta_quadrature_stat, total_err_stat_syst=hdelta_quadrature_stat_syst)
+    a2.grid(which="both", linewidth=0.5)
+    # Ratio axis ticks
+    ts = a2.set_yticks([0.5, 1.0, 1.5], minor=False)
+    ts = a2.set_yticks([0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], minor=True)
+
+    #a2.set_yticks(np.linspace(0.5,1.5, ))
+    if var.startswith("hist_numjet"):
+        a1.set_xticks(hd["edges"])
+
+    a1.text(0.015,0.99, r"CMS internal, $L = {0:.2f}\ fb^{{-1}}$ ({1})".format(
+        int_lumi/1000.0, datataking_year) + 
+        "\nd/m={0:.2f}".format(np.sum(hd.contents)/np.sum(htot_nominal.contents)) + 
+        ", wd={0:.2E}".format(wasserstein_distance(htot_nominal.contents, hd.contents)),
+        horizontalalignment='left',
+        verticalalignment='top',
+        transform=a1.transAxes,
+        fontsize=6
+    )
+    handles, labels = a1.get_legend_handles_labels()
+    a1.legend(handles[::-1], labels[::-1], frameon=False, fontsize=6, loc=1, ncol=2)
+    
+    varname, catname = assign_plot_title_label(var)
+    
+    a1.set_title(catname + " ({0})".format(analysis_names[analysis]))
+    a2.set_xlabel(varname)
+    
+    binwidth = np.diff(hd.edges)[0]
+    a1.set_ylabel("events / bin [{0:.1f}]".format(binwidth))
+    
+    plt.savefig(outdir + "/{0}_{1}_{2}.pdf".format(analysis, var, weight), bbox_inches="tight")
+    
+    return htot_nominal, hd, htot_variated, hdelta_quadrature
 
 def histstep(ax, edges, contents, **kwargs):
     ymins = []
@@ -38,42 +199,6 @@ def midpoints(arr):
 def plot_hist_step(ax, edges, contents, errors, kwargs_step={}, kwargs_errorbar={}):
     line = histstep(ax, edges, contents, **kwargs_step)
     ax.errorbar(midpoints(edges), contents, errors, lw=0, elinewidth=1, color=line.get_color()[0], **kwargs_errorbar)
-
-def plot_hist_ratio(hists_mc, hist_data):
-    plt.figure(figsize=(4,4), dpi=100)
-
-    ax1 = plt.axes([0.0, 0.23, 1.0, 0.8])
-       
-    hmc_tot = np.zeros_like(hist_data.contents)
-    hmc_tot2 = np.zeros_like(hist_data.contents)
-    for h in hists_mc:
-        plot_hist_step(ax1, h.edges, hmc_tot + h.contents,
-            np.sqrt(hmc_tot2 + h.contents_w2),
-            kwargs_step={"label": getattr(h, "label", None)}
-        )
-        hmc_tot += h.contents
-        hmc_tot2 += h.contents_w2
-#    plot_hist_step(h["edges"], hmc_tot, np.sqrt(hmc_tot2), kwargs_step={"color": "gray", "label": None})
-    ax1.errorbar(
-        midpoints(hist_data.edges), hist_data.contents,
-        np.sqrt(hist_data.contents_w2), marker="o", lw=0,
-        elinewidth=1.0, color="black", ms=3, label=getattr(hist_data, "label", None))
-    
-    ax1.set_yscale("log")
-    ax1.set_ylim(1e-2, 100*np.max(hist_data.contents))
-    
-    #ax1.get_yticklabels()[-1].remove()
-    
-    ax2 = plt.axes([0.0, 0.0, 1.0, 0.16], sharex=ax1)
-
-    ratio = hist_data.contents / hmc_tot
-    ratio_err = np.sqrt(hist_data.contents_w2) /hmc_tot
-    ratio[np.isnan(ratio)] = 0
-
-    plt.errorbar(midpoints(hist_data.edges), ratio, ratio_err, marker="o", lw=0, elinewidth=1, ms=3, color="black")
-    plt.ylim(0.5, 1.5)
-    plt.axhline(1.0, color="black")
-    return ax1, ax2
 
 def load_hist(hist_dict):
     return Histogram.from_dict({
@@ -377,75 +502,16 @@ def PrintDatacard(categories, event_counts, filenames, ofname):
     dcof.write("# Execute with:\n")
     dcof.write("# combine -n {0} -M FitDiagnostics -t -1 {1} \n".format(cat.full_name, os.path.basename(ofname)))
 
-def make_pdf_plot(args):
-    res, hd, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir = args
-
-    hmc = []
-    for mc_samp in mc_samples:
-        h = load_hist(res[mc_samp][analysis][var][weight])
-        h = h * weight_xs[mc_samp]
-        h.label = "{0} ({1:.1E})".format(mc_samp, np.sum(h.contents))
-        #if var == "hist_inv_mass_d":
-        #    h.contents[0] = 0
-        #    h.contents_w2[0] = 0
-        hmc += [h]
-
-    hd.label = "data ({0:.1E})".format(np.sum(hd.contents))
-
-    if var == "hist_inv_mass_d":
-        mask_inv_mass(hd)
-    #    hd.contents[0] = 0
-    #    hd.contents_w2[0] = 0
-
-    plt.figure(figsize=(4,4))
-    a1, a2 = plot_hist_ratio(hmc, hd)
-    a2.grid(which="both", linewidth=0.5)
-    # Ratio axis ticks
-    ts = a2.set_yticks([0.5, 1.0, 1.5], minor=False)
-    ts = a2.set_yticks([0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5], minor=True)
-
-    #a2.set_yticks(np.linspace(0.5,1.5, ))
-    if var.startswith("hist_numjet"):
-        a1.set_xticks(hd["edges"])
-
-    a1.text(0.01,0.99, r"CMS internal, $L = {0:.1f}\ pb^{{-1}}$".format(int_lumi),
-        horizontalalignment='left', verticalalignment='top', transform=a1.transAxes
-    )
-    a1.set_title(" ".join([var, weight]))
-    handles, labels = a1.get_legend_handles_labels()
-    a1.legend(handles[::-1], labels[::-1], frameon=False, fontsize=4, loc=1)
-
-    plt.savefig(outdir + "/{0}_{1}_{2}.pdf".format(analysis, var, weight), bbox_inches="tight")
-
 if __name__ == "__main__":
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
 
     pool = multiprocessing.Pool(12)
     #in picobarns
     #from https://docs.google.com/presentation/d/1OMnGnSs8TIiPPVOEKV8EbWS8YBgEsoMH0r0Js5v5tIQ/edit#slide=id.g3f663e4489_0_20
-    cross_sections = {
-        "dy": 5765.4,
-        "dy_0j": 4620.52,
-        "dy_1j": 859.59,
-        "dy_2j": 338.26,
-        "dy_m105_160_mg": 46.9479,
-        "dy_m105_160_vbf_mg": 2.02,
-        "dy_m105_160_amc": 41.81,
-        "dy_m105_160_vbf_amc": 41.81*0.0425242,
-        "ggh": 0.009605,
-        "vbf": 0.000823,
-        "ttjets_dl": 85.656,
-        "ttjets_sl": 687.0,
-        "ww_2l2nu": 5.595,
-        "wz_3lnu":  4.42965,
-        "wz_2l2q": 5.595,
-        "wz_1l1nu2q": 11.61,
-        "zz": 16.523,
-        "st_top": 136.02,
-        "st_t_antitop": 80.95,
-        "st_tw_top": 35.85,
-        "st_tw_antitop": 35.85,
-        "ewk_lljj_mll105_160": 0.0508896, 
-    }
+
+    from pars import cross_sections
 
     import json
 
@@ -503,7 +569,7 @@ if __name__ == "__main__":
 
 
     #for era in ["2016", "2017", "2018"]:
-    for era in ["2016", "2017", "2018"]:
+    for era in ["2018"]:
         res = {}
         genweights = {}
         weight_xs = {}
@@ -567,5 +633,7 @@ if __name__ == "__main__":
                     except KeyError:
                         print("Histogram {0} not found for data, skipping".format(var))
                         continue
-                    datacard_args += [(res, hdata, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir)]
+                    datacard_args += [(
+                        res, hdata, mc_samples, analysis,
+                        var, weight, weight_xs, int_lumi, outdir, era)]
         ret = list(pool.map(make_pdf_plot, datacard_args))
