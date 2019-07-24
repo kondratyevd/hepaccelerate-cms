@@ -27,11 +27,11 @@ function run_code_smallsamples() {
         --dataset tth
 }
 
-#run_code vbf
+run_code vbf
 #run_code dy_m105_160_vbf_amc
 
 #run_code_smallsamples
-run_code data
+#run_code data
 #run_code dy
 #run_code dy_0j
 #run_code dy_1j

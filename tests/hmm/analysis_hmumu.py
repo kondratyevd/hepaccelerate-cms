@@ -53,10 +53,9 @@ datasets = [
     ("data", "2017", "/store/data/Run2017*/SingleMuon/NANOAOD/Nano1June2019-v1/**/*.root", False),
     ("data", "2018", "/store/data/Run2018*/SingleMuon/NANOAOD/Nano1June2019-v1/**/*.root", False),
 
-#Skip inclusive
-    # ("dy", "2016", "/store/mc/RunIISummer16NanoAODv5/DYJetsToLL_M-50_TuneCUETP8M1_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
-    # ("dy", "2017", "/store/mc/RunIIFall17NanoAODv5/DYJetsToLL_M-50_TuneCP5_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
-    # ("dy", "2018", "/store/mc/RunIIAutumn18NanoAODv5/DYJetsToLL_M-50_TuneCP5_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
+    ("dy", "2016", "/store/mc/RunIISummer16NanoAODv5/DYJetsToLL_M-50_TuneCUETP8M1_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
+    ("dy", "2017", "/store/mc/RunIIFall17NanoAODv5/DYJetsToLL_M-50_TuneCP5_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
+    ("dy", "2018", "/store/mc/RunIIAutumn18NanoAODv5/DYJetsToLL_M-50_TuneCP5_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
     
     ("dy_0j", "2016", "/store/mc/RunIISummer16NanoAODv5/DYToLL_0J_13TeV-amcatnloFXFX-pythia8//**/*.root", True),
     ("dy_0j", "2017", "/store/mc/RunIIFall17NanoAODv5/DYJetsToLL_0J_TuneCP5_13TeV-amcatnloFXFX-pythia8///**/*.root", True),
@@ -74,7 +73,7 @@ datasets = [
     ("dy_m105_160_amc", "2017", "/store/mc/RunIIFall17NanoAODv5/DYJetsToLL_M-105To160_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
     ("dy_m105_160_amc", "2018", "/store/mc/RunIIAutumn18NanoAODv5/DYJetsToLL_M-105To160_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
 
-#wrong tune?
+#wrong tune for 2016?
     ("dy_m105_160_vbf_amc", "2016", "/store/mc/RunIISummer16NanoAODv5/DYJetsToLL_M-105To160_VBFFilter_TuneCUETP8M1_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
     ("dy_m105_160_vbf_amc", "2017", "/store/mc/RunIIFall17NanoAODv5/DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
     ("dy_m105_160_vbf_amc", "2018", "/store/mc/RunIIAutumn18NanoAODv5/DYJetsToLL_M-105To160_VBFFilter_TuneCP5_PSweights_13TeV-amcatnloFXFX-pythia8/**/*.root", True),
@@ -130,7 +129,7 @@ datasets = [
     ("st_t_top", "2018", "/store/mc/RunIIAutumn18NanoAODv5/ST_t-channel_top_5f_TuneCP5_13TeV-powheg-pythia8/**/*.root", True),
 
 #2016 ST_t-channel not available yet
-#https://cmsweb.cern.ch/das/request?view=list&limit=50&instance=prod%2Fglobal&input=%2FST_t-channel_top_5f_TuneCP5_13TeV-powheg-pythia8*%2F*NanoAODv5*%2FNANOAODSIM
+#https://cmsweb.cern.ch/das/request?view=list&limit=50&instance=prod%2Fglobal&input=%2FST_t-channel_antitop_5f_TuneCP5_13TeV-powheg-pythia8*%2F*NanoAODv5*%2FNANOAODSIM
 #   # ("st_t_antitop", "2016", "/store/mc/RunIISummer16NanoAODv5//**/*.root", True),
     ("st_t_antitop", "2017", "/store/mc/RunIIFall17NanoAODv5/ST_t-channel_antitop_5f_TuneCP5_PSweights_13TeV-powheg-pythia8/**/*.root", True),
     ("st_t_antitop", "2018", "/store/mc/RunIIAutumn18NanoAODv5/ST_t-channel_antitop_5f_TuneCP5_13TeV-powheg-pythia8/**/*.root", True),
@@ -143,9 +142,9 @@ datasets = [
     ("st_tw_top", "2017", "/store/mc/RunIIFall17NanoAODv5/ST_tW_top_5f_inclusiveDecays_TuneCP5_13TeV-powheg-pythia8/**/*.root", True),
     ("st_tw_top", "2018", "/store/mc/RunIIAutumn18NanoAODv5/ST_tW_top_5f_inclusiveDecays_TuneCP5_13TeV-powheg-pythia8/**/*.root", True),
 
-#2016 WZTo1L1Nu2Q_13TeV not available
+#2018 WZTo1L1Nu2Q_13TeV not available
 #https://cmsweb.cern.ch/das/request?view=list&limit=50&instance=prod%2Fglobal&input=%2FWZTo1L1Nu2Q_13TeV_amcatnloFXFX*%2F*NanoAODv5*%2FNANOAODSIM
-#   ("wz_1l1nu2q", "2016", "/store/mc/RunIISummer16NanoAODv5//**/*.root", True),
+   ("wz_1l1nu2q", "2016", "/store/mc/RunIISummer16NanoAODv5/WZTo1L1Nu2Q_13TeV_amcatnloFXFX_madspin_pythia8/**/*.root", True),
     ("wz_1l1nu2q", "2017", "/store/mc/RunIIFall17NanoAODv5/WZTo1L1Nu2Q_13TeV_amcatnloFXFX_madspin_pythia8/**/*.root", True),
 #    ("wz_1l1nu2q", "2018", "/store/mc/RunIIAutumn18NanoAODv5//**/*.root", True),
 
@@ -396,14 +395,16 @@ if __name__ == "__main__":
             "do_jec": True,
             "jec_tag": {"2016": "Summer16_23Sep2016V4", "2017": "Fall17_17Nov2017_V6", "2018": "Autumn18_V16"}, 
             "jet_mu_dr": 0.4,
-            "jet_pt_leading": {"2016": 25.0, "2017": 30.0, "2018": 30.0},
-            "jet_pt_subleading": {"2016": 25.0, "2017": 30.0, "2018": 30.0},
+            "jet_pt_leading": {"2016": 35.0, "2017": 35.0, "2018": 35.0},
+            "jet_pt_subleading": {"2016": 25.0, "2017": 25.0, "2018": 25.0},
             "jet_eta": 4.7,
             "jet_id": "tight",
             "jet_puid": "loose",
             "jet_btag": {"2016": 0.6321, "2017": 0.4941, "2018": 0.4184},
 
             "cat5_dijet_inv_mass": 400.0,
+            "cat5_abs_jj_deta_cut": 2.5,
+
             "masswindow_z_peak": [76, 106],
             "masswindow_h_region": [110, 150],
             "masswindow_h_peak": [115, 135],
