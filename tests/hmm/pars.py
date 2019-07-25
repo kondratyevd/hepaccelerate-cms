@@ -1,21 +1,62 @@
 categories = {
-    "zpeak": {
+    "z_peak": {
         "datacard_processes" : [
             "ggh",
             "vbf",
             #"wz_1l1nu2q",
-            #"wz_3lnu",
+            "wz_3lnu", 
             "ww_2l2nu", "wz_2l2q", "zz",
+            "ewk_lljj_mll50_mjj120",
             "ewk_lljj_mll105_160",
             #"st_top",
             #"st_t_antitop",
             "st_tw_top",
             "st_tw_antitop",
             "ttjets_sl", "ttjets_dl",
-            "dy_0j", "dy_1j", "dy_2j"
+            "dy_0j", "dy_1j", "dy_2j",
         ],
         "plot_processes": {
             "dy": ["dy_0j", "dy_1j", "dy_2j"],
+        }
+    },
+    "h_sideband": {
+        "datacard_processes" : [
+            "ggh",
+            "vbf",
+            #"wz_1l1nu2q",
+            "wz_3lnu", 
+            "ww_2l2nu", "wz_2l2q", "zz",
+            "ewk_lljj_mll50_mjj120",
+            "ewk_lljj_mll105_160",
+            #"st_top",
+            #"st_t_antitop",
+            "st_tw_top",
+            "st_tw_antitop",
+            "ttjets_sl", "ttjets_dl",
+            "dy_m105_160_amc", "dy_m105_160_vbf_amc",
+        ],
+        "plot_processes": {
+            "dy": ["dy_m105_160_amc", "dy_m105_160_vbf_amc"],
+        }
+    },
+    "h_peak": {
+        "datacard_processes" : [
+            "ggh",
+            "vbf",
+            #"wz_1l1nu2q",
+            "wz_3lnu", 
+            "ww_2l2nu", "wz_2l2q", "zz",
+            "ewk_lljj_mll50_mjj120",
+            "ewk_lljj_mll105_160",
+            #"st_top",
+            #"st_t_antitop",
+            "st_tw_top",
+            "st_tw_antitop",
+            "ttjets_sl", "ttjets_dl",
+            "dy_m105_160_amc", "dy_m105_160_vbf_amc",
+        ],
+        "plot_processes": {
+            "dy": ["dy_m105_160_amc", "dy_m105_160_vbf_amc"],
         }
     }
 }
@@ -43,6 +84,29 @@ cross_sections = {
     "st_tw_top": 35.85,
     "st_tw_antitop": 35.85,
     "ewk_lljj_mll105_160": 0.0508896, 
+    "ewk_lljj_mll50_mjj120": 0.128,
+}
+
+signal_samples = ["ggh", "vbf"]
+shape_systematics = ["jes", "jer", "puWeight"]
+common_scale_uncertainties = {
+    "lumi": 1.025,
+}
+scale_uncertainties = {
+    "ww_2l2nu": {"VVxsec": 1.10},
+    "wz_3lnu": {"VVxsec": 1.10},
+    "wz_2l2q": {"VVxsec": 1.10},
+    "wz_2l2q": {"VVxsec": 1.10},
+    "zz": {"VVxsec": 1.10},
+    "wjets": {"WJetsxsec": 1.10},
+    "dy_m105_160_amc": {"DYxsec": 1.10},
+    "dy_m105_160__vbf_amc": {"DYxsec": 1.10},
+    "ttjets_sl": {"TTxsec": 1.05},
+    "ttjets_dl": {"TTxsec": 1.05},
+    "st_t_top": {"STxsec": 1.05},
+    "st_t_antitop": {"STxsec": 1.05},
+    "st_tw_top": {"STxsec": 1.05},
+    "st_tw_antitop": {"STxsec": 1.05},
 }
 
 data_runs = {
@@ -112,6 +176,6 @@ varnames = {
 }
 
 analysis_names = {
-    "baseline": "JEC V8",
-    "redo_jec_V16": "JEC V16"
+    "baseline": "baseline",
+    "redo_jec_V16": "JEC V16",
 }
