@@ -383,7 +383,7 @@ if __name__ == "__main__":
                 },
 
             "muon_pt": 20,
-            "muon_pt_leading": {"2016": 26.0, "2017": 30.0, "2018": 26.0},
+            "muon_pt_leading": {"2016": 26.0, "2017": 26.0, "2018": 26.0},
             "muon_eta": 2.4,
             "muon_iso": 0.25,
             "muon_id": {"2016": "medium", "2017": "medium", "2018": "medium"},
@@ -464,8 +464,9 @@ if __name__ == "__main__":
             "categorization_trees": {}
         },
     }
-    #analysis_parameters["redo_jec_V16"] = copy.deepcopy(analysis_parameters["baseline"])
-    #analysis_parameters["redo_jec_V16"]["jec_tag"]["2018"] = "Autumn18_V16"
+    analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0},
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0},
 
     lumimask = {
         "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
