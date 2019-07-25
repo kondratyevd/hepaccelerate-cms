@@ -21,15 +21,15 @@ categories = {
 }
 
 cross_sections = {
-    "dy": 5765.4,
-    "dy_0j": 4620.52,
+    "dy": 2075.14*3, # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SummaryTable1G25ns; Pg 10: https://indico.cern.ch/event/746829/contributions/3138541/attachments/1717905/2772129/Drell-Yan_jets_crosssection.pdf
+    "dy_0j": 4620.52, #https://indico.cern.ch/event/673253/contributions/2756806/attachments/1541203/2416962/20171016_VJetsXsecsUpdate_PH-GEN.pdf
     "dy_1j": 859.59,
     "dy_2j": 338.26,
     "dy_m105_160_mg": 46.9479,
     "dy_m105_160_vbf_mg": 2.02,
-    "dy_m105_160_amc": 41.81,
-    "dy_m105_160_vbf_amc": 41.81*0.0425242,
-    "ggh": 0.009605,
+    "dy_m105_160_amc": 46.9479, # https://docs.google.com/document/d/1bViX80nXQ_p-W4gI6Fqt9PNQ49B6cP1_FhcKwTZVujo/edit?usp=sharing
+    "dy_m105_160_vbf_amc": 46.9479*0.0425242, #https://docs.google.com/document/d/1bViX80nXQ_p-W4gI6Fqt9PNQ49B6cP1_FhcKwTZVujo/edit?usp=sharing
+    "ggh": 0.010571, #48.61 * 0.0002176; https://twiki.cern.ch/twiki/bin/view/LHCPhysics/CERNHLHE2019
     "vbf": 0.000823,
     "ttjets_dl": 85.656,
     "ttjets_sl": 687.0,
