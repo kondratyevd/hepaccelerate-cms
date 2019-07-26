@@ -228,232 +228,239 @@ def analyze_data(
         leading_muon, subleading_muon, parameters,
         masswindow_z_peak, NUMPY_LIB)
 
-    #Apply JEC, create a dictionary of variated jet momenta
-    jet_pt_syst = apply_jec(jets, scalars, parameters, jetmet_corrections[dataset_era][parameters["jec_tag"][dataset_era]], NUMPY_LIB, use_cuda, is_mc)
+    #This computes the JEC, JER and associated systematics
+    jet_systematics = JetTransformer(
+        jets, scalars, parameters,
+        jetmet_corrections[dataset_era][parameters["jec_tag"][dataset_era]],
+        NUMPY_LIB, use_cuda, is_mc)
 
-    # Loop over all jet momentum variations and do analysis that depends on jets
-    for jet_syst_name, jet_pt_vec in jet_pt_syst.items():
-       
-        #For the moment, skip other jet systematics 
-        #if jet_syst_name[0] != "nominal":
-        #    continue
-        
-        # For events where the JEC/JER was variated, fill only the nominal weight
-        weights_selected = select_weights(weights, jet_syst_name)
+    #Now actually call the JEC computation for each scenario
+    for uncertainty_name in jet_systematics.jet_uncertainty_names + ["nominal"]:
 
-        # In case the pt vector is a function, we evaluate it
-        # This is used for GPUs to transfer the pt vector only when needed
-        if callable(jet_pt_vec):
-            jet_pt_vec = jet_pt_vec()
+        #This will be the variated pt vector
+        var_up_down = jet_systematics.get_variated_pts(uncertainty_name)
+        for jet_syst_name, jet_pt_vec in var_up_down.items():
+            print(jet_syst_name, jet_pt_vec.mean())
+            # For events where the JEC/JER was variated, fill only the nominal weight
+            weights_selected = select_weights(weights, jet_syst_name)
 
-        # Configure the jet pt vector to the variated one
-        # Would need to also do the mass here
-        jets.pt = jet_pt_vec
+            # In case the pt vector is a function, we evaluate it
+            # This is used for GPUs to transfer the pt vector only when needed
+            if callable(jet_pt_vec):
+                jet_pt_vec = jet_pt_vec()
 
-        #get the passing jets for events that pass muon selection
-        ret_jet = get_selected_jets(
-            scalars,
-            jets, muons, genJet, genpart,
-            ret_mu["selected_muons"], mask_events,
-            parameters["jet_pt_subleading"][dataset_era],
-            parameters["jet_eta"],
-            parameters["jet_mu_dr"],
-            parameters["jet_id"],
-            parameters["jet_puid"],
-            parameters["jet_btag"][dataset_era],
-            is_mc, use_cuda
-        )
+            # Configure the jet pt vector to the variated one
+            # Would need to also do the mass here
+            jets.pt = jet_pt_vec
+
+            #get the passing jets for events that pass muon selection
+            ret_jet = get_selected_jets(
+                scalars,
+                jets, muons, genJet, genpart,
+                ret_mu["selected_muons"], mask_events,
+                parameters["jet_pt_subleading"][dataset_era],
+                parameters["jet_eta"],
+                parameters["jet_mu_dr"],
+                parameters["jet_id"],
+                parameters["jet_puid"],
+                parameters["jet_btag"][dataset_era],
+                is_mc, use_cuda
+            )
 
 
-        pt_balance = ret_jet["dijet_pt"] / higgs_pt
+            pt_balance = ret_jet["dijet_pt"] / higgs_pt
 
-        # Set this default value as in Nan and Irene's code
-        ret_jet["dijet_inv_mass"][ret_jet["num_jets"] < 2] = -1000.0
+            # Set this default value as in Nan and Irene's code
+            ret_jet["dijet_inv_mass"][ret_jet["num_jets"] < 2] = -1000.0
 
-        # Get the data for the leading and subleading jets as contiguous vectors
-        leading_jet = jets.select_nth(0, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
-        subleading_jet = jets.select_nth(1, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
+            # Get the data for the leading and subleading jets as contiguous vectors
+            leading_jet = jets.select_nth(0, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
+            subleading_jet = jets.select_nth(1, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
 
-        if do_sync and jet_syst_name[0] == "nominal":
-            sync_printout(ret_mu, muons, scalars,
-                leading_muon, subleading_muon, higgs_inv_mass,
+            if do_sync and jet_syst_name[0] == "nominal":
+                sync_printout(ret_mu, muons, scalars,
+                    leading_muon, subleading_muon, higgs_inv_mass,
+                    n_additional_muons, n_additional_electrons,
+                    ret_jet, leading_jet, subleading_jet)
+
+            #compute DNN input variables in 2 muon, >=2jet region
+            dnn_presel = (
+                (ret_mu["selected_events"]) & (ret_jet["num_jets"] >= 2) &
+                (leading_jet["pt"] > parameters["jet_pt_leading"][dataset_era])
+            )
+
+            #apply VBF filter cut
+            if is_mc and dataset_name in parameters["vbf_filter"]:
+                mask_dijet_genmass = (ret_jet["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
+                mask_2gj = ret_jet["num_good_genjets"]>=2
+                invert_mask = parameters["vbf_filter"][dataset_name]
+                if invert_mask:
+                    mask_dijet_genmass = NUMPY_LIB.invert(mask_dijet_genmass)
+
+                mask_out = NUMPY_LIB.ones_like(mask_dijet_genmass)
+                mask_out[mask_2gj & NUMPY_LIB.invert(mask_dijet_genmass)] = False
+                if debug:
+                    print("sample", dataset_name, "numev", len(mask_out), "2gj", mask_2gj.sum(), "2gj&&mjj", (mask_2gj&mask_dijet_genmass).sum(), "out", mask_out.sum()) 
+                dnn_presel = dnn_presel & mask_out
+
+            #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
+            hists_dnn = {}
+            dnn_prediction = None
+            dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(
+               parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors,
+               scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
+               weights_selected, hists_dnn)
+           
+            #Assing a numerical category ID 
+            category =  assign_category(
+                ret_jet["num_jets"], ret_jet["num_jets_btag"],
                 n_additional_muons, n_additional_electrons,
-                ret_jet, leading_jet, subleading_jet)
-
-        #compute DNN input variables in 2 muon, >=2jet region
-        dnn_presel = (ret_mu["selected_events"]) & (ret_jet["num_jets"] >= 2) & (leading_jet["pt"] > parameters["jet_pt_leading"][dataset_era])
-
-        #apply VBF filter cut
-        if is_mc and dataset_name in parameters["vbf_filter"]:
-            mask_dijet_genmass = (ret_jet["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
-            mask_2gj = ret_jet["num_good_genjets"]>=2
-            invert_mask = parameters["vbf_filter"][dataset_name]
-            if invert_mask:
-                mask_dijet_genmass = NUMPY_LIB.invert(mask_dijet_genmass)
-
-            mask_out = NUMPY_LIB.ones_like(mask_dijet_genmass)
-            mask_out[mask_2gj & NUMPY_LIB.invert(mask_dijet_genmass)] = False
-            if debug:
-                print("sample", dataset_name, "numev", len(mask_out), "2gj", mask_2gj.sum(), "2gj&&mjj", (mask_2gj&mask_dijet_genmass).sum(), "out", mask_out.sum()) 
-            dnn_presel = dnn_presel & mask_out
-
-        #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
-        hists_dnn = {}
-        dnn_prediction = None
-        dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(
-           parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors,
-           scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
-           weights_selected, hists_dnn)
-       
-        #Assing a numerical category ID 
-        category =  assign_category(
-            ret_jet["num_jets"], ret_jet["num_jets_btag"],
-            n_additional_muons, n_additional_electrons,
-            ret_jet["dijet_inv_mass"],
-            leading_jet, subleading_jet,
-            parameters["cat5_dijet_inv_mass"],
-            parameters["cat5_abs_jj_deta_cut"]
-        )
-        scalars["category"] = category
+                ret_jet["dijet_inv_mass"],
+                leading_jet, subleading_jet,
+                parameters["cat5_dijet_inv_mass"],
+                parameters["cat5_abs_jj_deta_cut"]
+            )
+            scalars["category"] = category
 
 
-        #Assign the final analysis discriminator based on category
-        #scalars["final_discriminator"] = NUMPY_LIB.zeros_like(higgs_inv_mass)
-        if not (dnn_prediction is None):
-            #inds_nonzero = NUMPY_LIB.nonzero(dnn_presel)[0]
-            #if len(inds_nonzero) > 0:
-            #    ha.copyto_dst_indices(scalars["final_discriminator"], dnn_prediction, inds_nonzero)
-            #scalars["final_discriminator"][category != 5] = 0
+            #Assign the final analysis discriminator based on category
+            #scalars["final_discriminator"] = NUMPY_LIB.zeros_like(higgs_inv_mass)
+            if not (dnn_prediction is None):
+                #inds_nonzero = NUMPY_LIB.nonzero(dnn_presel)[0]
+                #if len(inds_nonzero) > 0:
+                #    ha.copyto_dst_indices(scalars["final_discriminator"], dnn_prediction, inds_nonzero)
+                #scalars["final_discriminator"][category != 5] = 0
 
-            #Add some additional debugging info to the DNN training ntuples
-            dnn_vars["cat_index"] = category[dnn_presel]
-            dnn_vars["run"] = scalars["run"][dnn_presel]
-            dnn_vars["lumi"] = scalars["luminosityBlock"][dnn_presel]
-            dnn_vars["event"] = scalars["event"][dnn_presel]
-            dnn_vars["dnn_pred"] = dnn_prediction
-            #Save the DNN training ntuples as npy files
-            if parameters["save_dnn_vars"] and jet_syst_name[0] == "nominal" and parameter_set_name == "baseline":
-                dnn_vars_np = {k: NUMPY_LIB.asnumpy(v) for k, v in dnn_vars.items()}
-                if is_mc:
-                    dnn_vars_np["genweight"] = NUMPY_LIB.asnumpy(scalars["genWeight"][dnn_presel])
-                arrs = []
-                names = []
-                for k, v in dnn_vars_np.items():
-                    arrs += [v]
-                    names += [k]
-                arrdata = np.core.records.fromarrays(arrs, names=names)
-                outpath = "{0}/{1}".format(parameters["dnn_vars_path"], dataset_era) 
-                if not os.path.isdir(outpath):
-                    os.makedirs(outpath)
-                np.save("{0}/{1}_{2}.npy".format(outpath, dataset_name, dataset_num_chunk), arrdata, allow_pickle=False)
+                #Add some additional debugging info to the DNN training ntuples
+                dnn_vars["cat_index"] = category[dnn_presel]
+                dnn_vars["run"] = scalars["run"][dnn_presel]
+                dnn_vars["lumi"] = scalars["luminosityBlock"][dnn_presel]
+                dnn_vars["event"] = scalars["event"][dnn_presel]
+                dnn_vars["dnn_pred"] = dnn_prediction
+                #Save the DNN training ntuples as npy files
+                if parameters["save_dnn_vars"] and jet_syst_name[0] == "nominal" and parameter_set_name == "baseline":
+                    dnn_vars_np = {k: NUMPY_LIB.asnumpy(v) for k, v in dnn_vars.items()}
+                    if is_mc:
+                        dnn_vars_np["genweight"] = NUMPY_LIB.asnumpy(scalars["genWeight"][dnn_presel])
+                    arrs = []
+                    names = []
+                    for k, v in dnn_vars_np.items():
+                        arrs += [v]
+                        names += [k]
+                    arrdata = np.core.records.fromarrays(arrs, names=names)
+                    outpath = "{0}/{1}".format(parameters["dnn_vars_path"], dataset_era) 
+                    if not os.path.isdir(outpath):
+                        os.makedirs(outpath)
+                    np.save("{0}/{1}_{2}.npy".format(outpath, dataset_name, dataset_num_chunk), arrdata, allow_pickle=False)
 
-        #Put the DNN histograms into the result dictionary
-        for k, v in hists_dnn.items():
-            if k not in hists:
-                hists[k] = {}
-            if jet_syst_name[0] == "nominal":
-                hists[k].update(hists_dnn[k])
-            else:
-                hists[k][jet_syst_name[0] + "__" + jet_syst_name[1]] = hists_dnn[k]["nominal"]
-
-        update_histograms_systematic(
-            hists,
-            "hist__dnn_presel__inv_mass",
-            jet_syst_name, higgs_inv_mass, weights_selected,
-           dnn_presel, NUMPY_LIB.linspace(70, 150, 41))
-
-        #Save histograms for numerical categories (cat5 only right now) and all mass bins
-        for massbin_name, massbin_msk, mass_edges in [
-                ("h_peak", masswindow_h_peak, parameters["masswindow_h_peak"]),
-                ("h_sideband", masswindow_h_sideband, parameters["masswindow_h_region"]),
-                ("z_peak", masswindow_z_peak, parameters["masswindow_z_peak"])]:
+            #Put the DNN histograms into the result dictionary
+            for k, v in hists_dnn.items():
+                if k not in hists:
+                    hists[k] = {}
+                if jet_syst_name[0] == "nominal":
+                    hists[k].update(hists_dnn[k])
+                else:
+                    hists[k][jet_syst_name[0] + "__" + jet_syst_name[1]] = hists_dnn[k]["nominal"]
 
             update_histograms_systematic(
                 hists,
-                "hist__dimuon_invmass_{0}__inv_mass".format(massbin_name),
+                "hist__dnn_presel__inv_mass",
                 jet_syst_name, higgs_inv_mass, weights_selected,
-                dnn_presel & massbin_msk, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
+               dnn_presel, NUMPY_LIB.linspace(70, 150, 41))
 
-            update_histograms_systematic(
-                hists,
-                "hist__dimuon_invmass_{0}__numjet".format(massbin_name),
-                jet_syst_name, ret_jet["num_jets"], weights_selected,
-                dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 10, 11))
-
-            update_histograms_systematic(
-                hists,
-                "hist__dimuon_invmass_{0}__dijet_inv_mass".format(massbin_name),
-                jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 1000, 41))
-
-            for icat in [5, ]:
-                msk_cat = category == icat
+            #Save histograms for numerical categories (cat5 only right now) and all mass bins
+            for massbin_name, massbin_msk, mass_edges in [
+                    ("h_peak", masswindow_h_peak, parameters["masswindow_h_peak"]),
+                    ("h_sideband", masswindow_h_sideband, parameters["masswindow_h_region"]),
+                    ("z_peak", masswindow_z_peak, parameters["masswindow_z_peak"])]:
 
                 update_histograms_systematic(
                     hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
+                    "hist__dimuon_invmass_{0}__inv_mass".format(massbin_name),
                     jet_syst_name, higgs_inv_mass, weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
 
                 update_histograms_systematic(
                     hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
-                    jet_syst_name, leading_jet["pt"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
-                
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
-                    jet_syst_name, subleading_jet["pt"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
-
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__leading_jet_eta".format(massbin_name, icat),
-                    jet_syst_name, leading_jet["eta"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
-                
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_eta".format(massbin_name, icat),
-                    jet_syst_name, subleading_jet["eta"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
-
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__dijet_inv_mass".format(massbin_name, icat),
-                    jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(400, 1000.0, 41))
-
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__num_soft_jets".format(massbin_name, icat),
-                    jet_syst_name, scalars["SoftActivityJetNjets5"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
-                
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__num_jets".format(massbin_name, icat),
+                    "hist__dimuon_invmass_{0}__numjet".format(massbin_name),
                     jet_syst_name, ret_jet["num_jets"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
-                
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 10, 11))
+
                 update_histograms_systematic(
                     hists,
-                    "hist__dimuon_invmass_{0}_cat{1}__pt_balance".format(massbin_name, icat),
-                    jet_syst_name, pt_balance, weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 5, 41))
+                    "hist__dimuon_invmass_{0}__dijet_inv_mass".format(massbin_name),
+                    jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 1000, 41))
 
-                #save all DNN input variables
-                for varname in dnn_vars.keys():
-                    if varname in parameters["dnn_input_histogram_bins"].keys():
-                        hb = parameters["dnn_input_histogram_bins"][varname]
-                        update_histograms_systematic(
-                            hists,
-                            "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, varname),
-                            jet_syst_name, dnn_vars[varname], weights_dnn,
-                            (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(*hb))
+                for icat in [5, ]:
+                    msk_cat = category == icat
 
-    #end of jet systematic loop
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
+                        jet_syst_name, higgs_inv_mass, weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
+
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
+                        jet_syst_name, leading_jet["pt"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
+                    
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
+                        jet_syst_name, subleading_jet["pt"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
+
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__leading_jet_eta".format(massbin_name, icat),
+                        jet_syst_name, leading_jet["eta"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
+                    
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_eta".format(massbin_name, icat),
+                        jet_syst_name, subleading_jet["eta"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
+
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__dijet_inv_mass".format(massbin_name, icat),
+                        jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(400, 1000.0, 41))
+
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__num_soft_jets".format(massbin_name, icat),
+                        jet_syst_name, scalars["SoftActivityJetNjets5"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
+                    
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__num_jets".format(massbin_name, icat),
+                        jet_syst_name, ret_jet["num_jets"], weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
+                    
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__pt_balance".format(massbin_name, icat),
+                        jet_syst_name, pt_balance, weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 5, 41))
+
+                    #save all DNN input variables
+                    for varname in dnn_vars.keys():
+                        if varname in parameters["dnn_input_histogram_bins"].keys():
+                            hb = parameters["dnn_input_histogram_bins"][varname]
+                            update_histograms_systematic(
+                                hists,
+                                "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, varname),
+                                jet_syst_name, dnn_vars[varname], weights_dnn,
+                                (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(*hb))
+
+        #end of isyst loop
+    #end of uncertainty_name loop
 
     # Collect results
     ret = Results({
@@ -468,6 +475,10 @@ def analyze_data(
         "trigger": mask_events,
         "muon": ret_mu["selected_events"]
     })
+
+    if use_cuda:
+        from numba import cuda
+        cuda.synchronize()
  
     return ret
 
@@ -553,8 +564,8 @@ def run_analysis(
                     t = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
                     t.start()
 
-            metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
-            metrics_thread.start()
+            #metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+            #metrics_thread.start()
 
             rets = []
             num_processed = 0
@@ -607,7 +618,7 @@ def run_analysis(
 
             #clean up threads
             threadk.set_tokill(True)
-            metrics_thread.join() 
+            #metrics_thread.join() 
 
             #save output
             ret = sum(rets, Results({}))
@@ -974,10 +985,9 @@ def compute_inv_mass(objects, mask_events, mask_objects):
     return inv_mass, pt_total
 
 def fill_with_weights(values, weight_dict, mask, bins):
-    ret = {
-        wn: get_histogram(values[mask], weight_dict[wn][mask], bins)
-        for wn in weight_dict.keys()
-    }
+    ret = {}
+    for wn in weight_dict.keys():
+        ret[wn] = get_histogram(values[mask], weight_dict[wn][mask], bins)
     return ret
 
 def update_histograms_systematic(hists, hist_name, systematic_name, values, weight_dict, mask, bins):
@@ -1004,6 +1014,7 @@ def fix_large_weights(weights, maxw=10.0):
     weights[:] = weights[:] / NUMPY_LIB.mean(weights)
 
 def compute_pu_weights(pu_corrections_target, weights, mc_nvtx, reco_nvtx):
+    mc_nvtx = NUMPY_LIB.array(mc_nvtx, dtype=NUMPY_LIB.float32)
     pu_edges, (values_nom, values_up, values_down) = pu_corrections_target
 
     src_pu_hist = get_histogram(mc_nvtx, weights, pu_edges)
@@ -1013,22 +1024,22 @@ def compute_pu_weights(pu_corrections_target, weights, mc_nvtx, reco_nvtx):
     ratio = values_nom / values_target
     remove_inf_nan(ratio)
     pu_weights = NUMPY_LIB.zeros_like(weights)
-    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges),
-        NUMPY_LIB.array(ratio), pu_weights)
+    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges, dtype=NUMPY_LIB.float32),
+        NUMPY_LIB.array(ratio, dtype=NUMPY_LIB.float32), pu_weights)
     fix_large_weights(pu_weights) 
      
     ratio_up = values_up / values_target
     remove_inf_nan(ratio_up)
     pu_weights_up = NUMPY_LIB.zeros_like(weights)
-    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges),
-        NUMPY_LIB.array(ratio_up), pu_weights_up)
+    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges, dtype=NUMPY_LIB.float32),
+        NUMPY_LIB.array(ratio_up, dtype=NUMPY_LIB.float32), pu_weights_up)
     fix_large_weights(pu_weights_up) 
     
     ratio_down = values_down / values_target
     remove_inf_nan(ratio_down)
     pu_weights_down = NUMPY_LIB.zeros_like(weights)
-    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges),
-        NUMPY_LIB.array(ratio_down), pu_weights_down)
+    ha.get_bin_contents(reco_nvtx, NUMPY_LIB.array(pu_edges, dtype=NUMPY_LIB.float32),
+        NUMPY_LIB.array(ratio_down, dtype=NUMPY_LIB.float32), pu_weights_down)
     fix_large_weights(pu_weights_down) 
     
     return pu_weights, pu_weights_up, pu_weights_down
@@ -1392,7 +1403,11 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactor
         dnn_vars_arr /= dnn_normfactors[1]
 
         #for TF, need to convert library to numpy, as it doesn't accept cupy arrays
-        dnn_pred = NUMPY_LIB.array(dnn_model.predict(NUMPY_LIB.asnumpy(dnn_vars_arr), batch_size=10000)[:, 0])
+        dnn_pred = NUMPY_LIB.array(dnn_model.predict(
+            NUMPY_LIB.asnumpy(dnn_vars_arr),
+            batch_size=dnn_vars_arr.shape[0])[:, 0]
+        )
+
     else:
         dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel)
 
@@ -1449,144 +1464,144 @@ def get_jer_smearfactors(pt_or_m, ratio_jet_genjet, msk_no_genjet, msk_poor_reso
 
     return smear_n, smear_u, smear_d, sigma_unmatched_n
 
-def apply_jec(jets, scalars, parameters, jetmet_corrections, NUMPY_LIB, use_cuda, is_mc):
-    # Change rho from a per-event variable to per-jet by broadcasting the
-    # value of each event to all the jets in the event
-    jets_rho = NUMPY_LIB.zeros_like(jets.pt)
-    ha.broadcast(scalars["fixedGridRhoFastjetAll"], jets.offsets, jets_rho)
-    
-    # Get the uncorrected jet pt and mass
-    raw_pt = jets.pt * (1.0 - jets.rawFactor)
-    raw_mass = jets.mass * (1.0 - jets.rawFactor) 
 
-    # Need to use the CPU for JEC/JER currently
-    if use_cuda:
-        raw_pt = NUMPY_LIB.asnumpy(raw_pt)
-        eta = NUMPY_LIB.asnumpy(jets.eta)
-        rho = NUMPY_LIB.asnumpy(jets_rho)
-        area = NUMPY_LIB.asnumpy(jets.area)
-    else:
-        raw_pt = raw_pt
-        eta = jets.eta
-        rho = jets_rho
-        area = jets.area
+class JetTransformer:
+    def __init__(self, jets, scalars, parameters, jetmet_corrections, NUMPY_LIB, use_cuda, is_mc):
+        self.jets = jets
+        self.scalars = scalars
+        self.jetmet_corrections = jetmet_corrections
+        self.NUMPY_LIB = NUMPY_LIB
+        self.use_cuda = use_cuda
+        self.is_mc = is_mc
 
-    #dictionary of jet systematic scenario name -> jet pt vector
-    #the data vectors can be large, so it is possible to use a lambda function instead
-    #which upon calling will return a jet pt vector
-    jet_pt_syst = {
-        ("raw_jets", ""): NUMPY_LIB.array(raw_pt),
-        ("nominal", ""): jets.pt,
-    }
+        self.jets_rho = NUMPY_LIB.zeros_like(jets.pt)
+        ha.broadcast(scalars["fixedGridRhoFastjetAll"], self.jets.offsets, self.jets_rho)
+        
+        # Get the uncorrected jet pt and mass
+        self.raw_pt = self.jets.pt * (1.0 - self.jets.rawFactor)
+        self.raw_mass = self.jets.mass * (1.0 - self.jets.rawFactor)
 
-    #Re-apply jet energy corrections and compute JEC & JER uncertainties
-    if parameters["do_jec"]:
-        #compute and apply jet corrections
-        if is_mc:
-            corr = jetmet_corrections.jec_mc.getCorrection(JetPt=raw_pt.copy(), Rho=rho, JetEta=eta, JetA=area)
+        self.jet_uncertainty_names = list(self.jetmet_corrections.jesunc.levels)
+        self.jet_uncertainty_names.pop(self.jet_uncertainty_names.index("jes"))
+
+        # Need to use the CPU for JEC/JER currently
+        if self.use_cuda:
+            self.raw_pt = NUMPY_LIB.asnumpy(self.raw_pt)
+            self.eta = NUMPY_LIB.asnumpy(self.jets.eta)
+            self.rho = NUMPY_LIB.asnumpy(self.jets_rho)
+            self.area = NUMPY_LIB.asnumpy(self.jets.area)
         else:
-            final_corr = NUMPY_LIB.zeros_like(jets.pt)
+            self.raw_pt = self.raw_pt
+            self.eta = self.jets.eta
+            self.rho = self.jets_rho
+            self.area = self.jets.area
 
-            #final correction is run-dependent, compute that for each run separately
-            for run_idx in NUMPY_LIB.unique(scalars["run_index"]):
-                
-                if use_cuda:
-                    run_idx = int(run_idx)
-                msk = scalars["run_index"] == run_idx
-                
-                #find the jets in the events that pass this run index cut
-                jets_msk = NUMPY_LIB.zeros(jets.numobjects(), dtype=NUMPY_LIB.bool)
-                ha.broadcast(msk, jets.offsets, jets_msk)
-                inds_nonzero = NUMPY_LIB.nonzero(jets_msk)[0]
+        if self.is_mc:
+            self.corr_jec = self.apply_jec_mc()
+        else:
+            self.corr_jec = self.apply_jec_data()
 
-                #Evaluate jet correction (on CPU only currently)
-                if use_cuda:
-                    jets_msk = NUMPY_LIB.asnumpy(jets_msk)
-                run_name = runmap_numerical_r[run_idx]
-                corr = jetmet_corrections.jec_data[run_name].getCorrection(
-                    JetPt=raw_pt[jets_msk].copy(), Rho=rho[jets_msk], JetEta=eta[jets_msk], JetA=area[jets_msk])
-                if debug:
-                    print("run_idx=", run_idx, corr.mean(), corr.std())
+        self.corr_jec = NUMPY_LIB.array(self.corr_jec)
+        self.pt_jec = NUMPY_LIB.array(self.raw_pt) * self.corr_jec 
 
-                #update the final jet correction for the jets in the events in this run
-                if len(inds_nonzero) > 0:
-                    ha.copyto_dst_indices(final_corr, corr, inds_nonzero)
-            corr = final_corr
-	
-        corr = NUMPY_LIB.array(corr)
-        pt_jec = NUMPY_LIB.array(raw_pt) * corr 
-        mass_jec = raw_mass * corr
-        jet_pt_syst[("nominal", "")] = pt_jec
-        
-        #JER and JEC uncertainty
-        if is_mc:
-            if jetmet_corrections.jer:
+        if is_mc and not (self.jetmet_corrections.jer is None):
+            smear_n, smear_u, smear_d = self.apply_jer()
 
-                #This is done only on CPU
-                resos = jetmet_corrections.jer.getResolution(
-                    JetEta=eta, Rho=rho, JetPt=NUMPY_LIB.asnumpy(pt_jec))
-                resosfs = jetmet_corrections.jersf.getScaleFactor(JetEta=eta)
+            self.pt_jec_jer = self.pt_jec * smear_n
+            self.pt_jec_jer = self.pt_jec * smear_n
 
-                #The following is done either on CPU or GPU
-                resos = NUMPY_LIB.array(resos)
-                resosfs = NUMPY_LIB.array(resosfs)
+    def apply_jer(self):
+        #This is done only on CPU
+            resos = self.jetmet_corrections.jer.getResolution(
+                JetEta=eta, Rho=rho, JetPt=NUMPY_LIB.asnumpy(pt_jec))
+            resosfs = self.jetmet_corrections.jersf.getScaleFactor(JetEta=eta)
 
-                dpt_jet_genjet = jets.pt - jets.genpt
-                dpt_jet_genjet[jets.genpt == 0] = 0
-                ratio_jet_genjet_pt = dpt_jet_genjet / jets.pt
+            #The following is done either on CPU or GPU
+            resos = NUMPY_LIB.array(resos)
+            resosfs = NUMPY_LIB.array(resosfs)
 
-                msk_no_genjet = ratio_jet_genjet_pt == 0
-                msk_poor_reso = resosfs[:, 0] < 1
+            dpt_jet_genjet = jets.pt - jets.genpt
+            dpt_jet_genjet[jets.genpt == 0] = 0
+            ratio_jet_genjet_pt = dpt_jet_genjet / jets.pt
 
-                dm_jet_genjet = jets.mass - jets.genmass
-                dm_jet_genjet[jets.genmass == 0] = 0
-                ratio_jet_genjet_mass = dm_jet_genjet / jets.mass
-               
-                smear_n, smear_u, smear_d, sigma_unmatched_n = get_jer_smearfactors(
-                    jets.pt, ratio_jet_genjet_pt, msk_no_genjet, msk_poor_reso, resos, resosfs)
-                # mass_smear_n, mass_smear_u, mass_smear_d = get_jer_smearfactors(
-                #     jets.mass, ratio_jet_genjet_mass, msk_no_genjet, msk_poor_reso, resosfs)
+            msk_no_genjet = ratio_jet_genjet_pt == 0
+            msk_poor_reso = resosfs[:, 0] < 1
 
-                pt_jec_jer = pt_jec * smear_n
-                pt_jec_jer_up = pt_jec * smear_u
-                pt_jec_jer_down = pt_jec * smear_d
+            dm_jet_genjet = jets.mass - jets.genmass
+            dm_jet_genjet[jets.genmass == 0] = 0
+            ratio_jet_genjet_mass = dm_jet_genjet / jets.mass
+           
+            smear_n, smear_u, smear_d, sigma_unmatched_n = get_jer_smearfactors(
+                jets.pt, ratio_jet_genjet_pt, msk_no_genjet, msk_poor_reso, resos, resosfs)
 
-                # mass_jec_jer_central = mass_jec * mass_smear_n
-                # mass_jec_jer_up = mass_jec * mass_smear_u
-                # mass_jec_jer_down = mass_jec * mass_smear_d
+    def apply_jec_mc(self):
+        corr = self.jetmet_corrections.jec_mc.getCorrection(
+            JetPt=self.raw_pt.copy(),
+            Rho=self.rho,
+            JetEta=self.eta,
+            JetA=self.area)
+        return corr
 
-            else:
-                pt_jec_jer = pt_jec
-                pt_jec_jer_up = pt_jec
-                pt_jec_jer_down = pt_jec
+    def apply_jec_data(self):
+        final_corr = NUMPY_LIB.zeros_like(self.jets.pt)
 
-                # mass_jec_jer = mass_jec
-                # mass_jec_jer_up = mass_jec
-                # mass_jec_jer_down = mass_jec
+        #final correction is run-dependent, compute that for each run separately
+        for run_idx in NUMPY_LIB.unique(self.scalars["run_index"]):
+            
+            if self.use_cuda:
+                run_idx = int(run_idx)
+            msk = scalars["run_index"] == run_idx
+            
+            #find the jets in the events that pass this run index cut
+            jets_msk = NUMPY_LIB.zeros(self.jets.numobjects(), dtype=NUMPY_LIB.bool)
+            ha.broadcast(msk, self.jets.offsets, jets_msk)
+            inds_nonzero = NUMPY_LIB.nonzero(jets_msk)[0]
 
-            jet_pt_syst[("nominal", "")] = pt_jec_jer
-            jet_pt_syst[("nanoaod", "")] = NUMPY_LIB.array(jets.pt)
-            jet_pt_syst[("jec", "")] = pt_jec
+            #Evaluate jet correction (on CPU only currently)
+            if self.use_cuda:
+                jets_msk = NUMPY_LIB.asnumpy(jets_msk)
+            run_name = runmap_numerical_r[run_idx]
 
-            jesunc = dict(list(jetmet_corrections.jesunc.getUncertainty(JetPt=NUMPY_LIB.array(pt_jec_jer), JetEta=jets.eta))) 
+            corr = self.jetmet_corrections.jec_data[run_name].getCorrection(
+                JetPt=self.raw_pt[jets_msk].copy(),
+                Rho=self.rho[jets_msk],
+                JetEta=self.eta[jets_msk],
+                JetA=self.area[jets_msk])
+            if debug:
+                print("run_idx=", run_idx, corr.mean(), corr.std())
 
-            jet_pt_syst[("jer", "up")] = pt_jec_jer_up
-            jet_pt_syst[("jer", "down")] = pt_jec_jer_down
+            #update the final jet correction for the jets in the events in this run
+            if len(inds_nonzero) > 0:
+                ha.copyto_dst_indices(final_corr, corr, inds_nonzero)
+        corr = final_corr
+        return corr
 
-            #add variated jet momenta
-            for unc_name, arr in jesunc.items():
-                jet_pt_syst[(unc_name, "up")] = pt_jec_jer * NUMPY_LIB.array(jesunc[unc_name][:, 0])
-                jet_pt_syst[(unc_name, "down")] = pt_jec_jer * NUMPY_LIB.array(jesunc[ unc_name][:, 1]) 
+    def apply_jec_unc(self, startfrom="pt_jec", uncertainty_name="Total"):
+        ptvec = getattr(self, startfrom)
 
-    if debug and is_mc:
-        print("variated jet pt")
-        for unc_name in jet_pt_syst.keys():
-            arr = jet_pt_syst[unc_name]
-            diff = arr - jets.pt
-            print("wrt NanoAOD", unc_name, diff.mean(), diff.std())
-        
-    #dictionary of variated jet momenta
-    return jet_pt_syst
+        idx_func = self.jetmet_corrections.jesunc.levels.index(uncertainty_name)
+        jec_unc_func = self.jetmet_corrections.jesunc._funcs[idx_func]
+        function_signature = self.jetmet_corrections.jesunc._funcs[idx_func].signature
+
+        args = {
+            "JetPt": NUMPY_LIB.array(ptvec),
+            "JetEta": NUMPY_LIB.array(self.eta)
+        }
+
+        jec_unc_vec = jec_unc_func(*tuple([args[s] for s in function_signature]))
+        return NUMPY_LIB.array(jec_unc_vec)
+
+    def get_variated_pts(self, variation_name):
+        if variation_name in self.jet_uncertainty_names:
+            startfrom = "pt_jec"
+            corrs_up_down = self.apply_jec_unc(startfrom, variation_name)
+            ptvec = getattr(self, startfrom)
+            return {
+                (variation_name, "up"): ptvec*corrs_up_down[:, 0],
+                (variation_name, "down"): ptvec*corrs_up_down[:, 1]
+            }
+        elif variation_name == "nominal":
+            return {("nominal", ""): self.pt_jec}
 
 def fill_muon_hists(hists, scalars, weights, ret_mu, inv_mass,
     leading_muon, subleading_muon, parameters,
