@@ -10,8 +10,8 @@ export NUMBA_THREADING_LAYER=tbb
 export NUMBA_ENABLE_AVX=1
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS 
-export SINGULARITY_IMAGE=/bigdata/shared/Software/singularity/gpuservers/singularity/images/cupy.simg
-export MAXFILES=1
+export SINGULARITY_IMAGE=/storage/user/jpata/cupy.simg
+export MAXFILES=-1
 
 function run_code() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
@@ -34,13 +34,13 @@ function run_code_smallsamples() {
 #run_code vbf
 #run_code dy_m105_160_vbf_amc
 
-#run_code_smallsamples
-#run_code data
-#run_code dy
-#run_code dy_0j
-#run_code dy_1j
-#run_code dy_2j
-#run_code dy_m105_160_amc
+run_code_smallsamples
+run_code data
+run_code dy
+run_code dy_0j
+run_code dy_1j
+run_code dy_2j
+run_code dy_m105_160_amc
 run_code dy_m105_160_vbf_amc
 run_code ttjets_dl
 run_code ttjets_sl

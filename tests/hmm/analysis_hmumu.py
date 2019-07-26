@@ -271,10 +271,11 @@ if __name__ == "__main__":
     args.use_cuda = USE_CUPY
 
     # Optionally disable pinned memory (will be somewhat slower)
-    if args.use_cuda and not args.pinned:
+    if args.use_cuda:
         import cupy
-        cupy.cuda.set_allocator(None)
-        cupy.cuda.set_pinned_memory_allocator(None)
+        if not args.pinned:
+            cupy.cuda.set_allocator(None)
+            cupy.cuda.set_pinned_memory_allocator(None)
         cuda_device = cupy.cuda.Device(os.environ.get("CUDA_VISIBLE_DEVICES", 0))
         print("Using CUDA device {0}".format(cuda_device))
         cuda_device.use()
@@ -356,7 +357,7 @@ if __name__ == "__main__":
                 },
 
             "muon_pt": 20,
-            "muon_pt_leading": {"2016": 26.0, "2017": 30.0, "2018": 26.0},
+            "muon_pt_leading": {"2016": 26.0, "2017": 26.0, "2018": 26.0},
             "muon_eta": 2.4,
             "muon_iso": 0.25,
             "muon_id": {"2016": "medium", "2017": "medium", "2018": "medium"},
@@ -431,14 +432,15 @@ if __name__ == "__main__":
                 "Higgs_pt": (0, 200, 20),
                 "Higgs_eta": (-3, 3, 20),
                 "Higgs_mass": (110, 150, 20),
-                "dnn_pred": (-1, 1, 20),
+                "dnn_pred": (0, 1, 20),
             },
 
             "categorization_trees": {}
         },
     }
-    #analysis_parameters["redo_jec_V16"] = copy.deepcopy(analysis_parameters["baseline"])
-    #analysis_parameters["redo_jec_V16"]["jec_tag"]["2018"] = "Autumn18_V16"
+    analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
 
     lumimask = {
         "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
@@ -613,13 +615,17 @@ if __name__ == "__main__":
         
         #load DNN model
         import keras
-        dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYvbf_23July2019.h5")
+        dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.h5")
+        dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
+
+        if args.use_cuda:
+            dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
 
     run_analysis(args, outpath, datasets, analysis_parameters,
         {k: args.chunksize*v for k, v in chunksizes_mult.items()},
         {k: args.maxfiles*v for k, v in maxfiles_mult.items()},
         lumidata, lumimask, pu_corrections, rochester_corr,
-        lepsf_iso, lepsf_id, lepsf_trig, dnn_model,
+        lepsf_iso, lepsf_id, lepsf_trig, dnn_model, dnn_normfactors,
         jetmet_corrections)
 
     # if "analyze" in args.action: 
