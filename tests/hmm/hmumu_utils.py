@@ -628,7 +628,7 @@ def run_analysis(
     bench_ret["nev_total"] = nev_total
     bench_ret["total_time"] = dt
     bench_ret["evspeed"] = nev_total/dt/1000/1000
-    with open("analysis_benchmarks.txt", "a") as of:
+    with open(args.out + "/analysis_benchmarks.txt", "a") as of:
         of.write(json.dumps(bench_ret) + '\n')
 
 def event_loop(train_batches_queue, use_cuda, **kwargs):

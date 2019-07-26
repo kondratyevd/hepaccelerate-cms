@@ -388,7 +388,7 @@ if __name__ == "__main__":
             "extra_electrons_id": "mvaFall17V1Iso_WP90",
 
             "save_dnn_vars": True,
-            "dnn_vars_path": "{0}/dnn_vars".format(os.getcwd()),
+            "dnn_vars_path": "{0}/dnn_vars".format(args.out),
 
             #If true, apply mjj > cut, otherwise inverse
             "vbf_filter_mjj_cut": 350,

@@ -1,0 +1,18 @@
+Universe = vanilla
+Executable = hmm_analyze.sh
+Arguments = $ENV(USER)
+Log = logs/example_job.$(Cluster).log
+Output = logs/example_job.out.$(Cluster).$(Process)
+Error = logs/example_job.err.$(Cluster).$(Process)
+Requirements=(TARGET.OpSysAndVer=="CentOS7" && regexp("blade.*", TARGET.Machine))
+#Requirements=(TARGET.OpSysAndVer=="CentOS7")
++RunAsOwner = True
++InteractiveUser = true
++SingularityImage = "/storage/user/jpata/cupy2.simg"
++SingularityBindCVMFS = True
+run_as_owner = True
+x509userproxy = $ENV(X509_USER_PROXY)
+RequestDisk = 4
+RequestMemory = 32*1000
+RequestCpus = 32
+Queue 1

@@ -11,10 +11,10 @@ MAXFILES=-1
 #This is where the intermediate analysis files will be saved and loaded from
 #As long as one person produces it, other people can run the analysis on this
 
-export CACHE_PATH=/storage/user/$USER/hmm/cache
+export CACHE_PATH=/storage/user/$USER/hmm/cache2
 #export CACHE_PATH=/nvme1/jpata/cache
 
-export SINGULARITY_IMAGE=/storage/user/jpata/cupy.simg
+export SINGULARITY_IMAGE=/storage/user/jpata/cupy2.simg
 
 if [ ! -f "$SINGULARITY_IMAGE" ]; then
     echo "Singularity image is missing, check the script"
