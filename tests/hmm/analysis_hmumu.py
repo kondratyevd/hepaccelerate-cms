@@ -276,9 +276,6 @@ if __name__ == "__main__":
         if not args.pinned:
             cupy.cuda.set_allocator(None)
             cupy.cuda.set_pinned_memory_allocator(None)
-        cuda_device = cupy.cuda.Device(os.environ.get("CUDA_VISIBLE_DEVICES", 0))
-        print("Using CUDA device {0}".format(cuda_device))
-        cuda_device.use()
 
     #Use sync-only datasets
     if args.do_sync:

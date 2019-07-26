@@ -491,10 +491,10 @@ def run_analysis(
        except Exception as e:
            pass
        filenames_cache = {}
-       for datasetname, dataset_era, globpattern, is_mc in datasets:
+       for dataset_name, dataset_era, globpattern, is_mc in datasets:
            filenames_all = glob.glob(args.datapath + globpattern, recursive=True)
            filenames_all = [fn for fn in filenames_all if not "Friend" in fn]
-           filenames_cache[datasetname + "_" + dataset_era] = [fn.replace(args.datapath, "") for fn in filenames_all]
+           filenames_cache[dataset_name + "_" + dataset_era] = [fn.replace(args.datapath, "") for fn in filenames_all]
    
        #save all dataset filenames to a json file 
        print("Creating a json dump of all the dataset filenames")
@@ -511,14 +511,14 @@ def run_analysis(
             raise Exception("No files found for dataset {0}".format(dataset))
             
     processed_size_mb = 0
-    for datasetname, dataset_era, globpattern, is_mc in datasets:
-        filenames_all = filenames_cache[datasetname + "_" + dataset_era]
+    for dataset_name, dataset_era, globpattern, is_mc in datasets:
+        filenames_all = filenames_cache[dataset_name + "_" + dataset_era]
         filenames_all = [args.datapath + "/" + fn for fn in filenames_all]
  
-        print("Processing dataset {0}_{1}".format(datasetname, dataset_era))
+        print("Processing dataset {0}_{1}".format(dataset_name, dataset_era))
         if maxfiles[dataset_era] > 0:
             mf = maxfiles[dataset_era]
-            #if datasetname == "data":
+            #if dataset_name == "data":
             #    mf = 10*mf
             filenames_all = filenames_all[:mf]
 
@@ -530,7 +530,7 @@ def run_analysis(
             hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
                 
             _nev_total, _processed_size_mb = cache_data(
-                filenames_all, datasetname, datastructure,
+                filenames_all, dataset_name, datastructure,
                 args.cache_location, args.datapath, is_mc,
                 hlt_bits,
                 nworkers=args.nthreads)
@@ -541,7 +541,7 @@ def run_analysis(
 
             #Create a thread that will load data in the background
             training_set_generator = InputGen(
-                datasetname, dataset_era, list(filenames_all), datastructure,
+                dataset_name, dataset_era, list(filenames_all), datastructure,
                 args.nthreads, chunksize[dataset_era], args.cache_location, args.datapath)
             threadk = thread_killer()
             threadk.set_tokill(False)
@@ -607,13 +607,14 @@ def run_analysis(
 
             #clean up threads
             threadk.set_tokill(True)
+            metrics_thread.join() 
 
             #save output
             ret = sum(rets, Results({}))
             if is_mc:
                 ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
                 ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
-            ret.save_json("{0}/{1}_{2}.json".format(outpath, datasetname, dataset_era))
+            ret.save_json("{0}/{1}_{2}.json".format(outpath, dataset_name, dataset_era))
     
     t1 = time.time()
     dt = t1 - t0
@@ -2214,6 +2215,6 @@ def threaded_metrics(tokill, train_batches_queue):
             )
         logfile.flush()
         time.sleep(dt)
-
+    print("threaded_metrics done")
     logfile.close()
     return
