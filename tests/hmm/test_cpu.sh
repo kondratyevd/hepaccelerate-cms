@@ -27,21 +27,21 @@ function run_code_smallsamples() {
         --dataset tth
 }
 
-#run_code vbf
+run_code vbf
 #run_code dy_m105_160_vbf_amc
 
-run_code_smallsamples
-run_code data
-run_code dy
-run_code dy_0j
-run_code dy_1j
-run_code dy_2j
-run_code dy_m105_160_amc
-run_code dy_m105_160_vbf_amc
-run_code ttjets_dl
-run_code ttjets_sl
-run_code ewk_lljj_mll50_mjj120
-run_code ewk_lljj_mll105_160
-run_code ww_2l2nu
-run_code wz_3lnu
-run_code wz_2l2q
+#run_code_smallsamples
+#run_code data
+#run_code dy
+#run_code dy_0j
+#run_code dy_1j
+#run_code dy_2j
+#run_code dy_m105_160_amc
+#run_code dy_m105_160_vbf_amc
+#run_code ttjets_dl
+#run_code ttjets_sl
+#run_code ewk_lljj_mll50_mjj120
+#run_code ewk_lljj_mll105_160
+#run_code ww_2l2nu
+#run_code wz_3lnu
+#run_code wz_2l2q

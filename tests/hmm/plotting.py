@@ -13,6 +13,14 @@ import multiprocessing
 from pars import catnames, varnames, analysis_names
 from scipy.stats import wasserstein_distance
 
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis plotting')
+    parser.add_argument('--input', action='store', type=str, help='Input directory from the previous step')
+    args = parser.parse_args()
+    return args
+
 def assign_plot_title_label(histname):
     spl = histname.split("__")
     varname_nice = "UNKNOWN"
@@ -510,6 +518,8 @@ def PrintDatacard(categories, event_counts, filenames, ofname):
 
 if __name__ == "__main__":
 
+    cmdline_args = parse_args()
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -527,15 +537,15 @@ if __name__ == "__main__":
             mc_samples_load.add(process)
     mc_samples_load = list(mc_samples_load)
 
-    #for era in ["2016", "2017", "2018"]:
-    for era in ["2018"]:
+    for era in ["2016", "2017", "2018"]:
+    #for era in ["2018"]:
         res = {}
         genweights = {}
         weight_xs = {}
         datacard_args = []
         
         analysis = "baseline"
-        input_folder = "out2"
+        input_folder = cmdline_args.input
         dd = "{0}/{1}".format(input_folder, analysis) 
         res["data"] = json.load(open(dd + "/data_{0}.json".format(era)))
         for mc_samp in mc_samples_load:
@@ -565,7 +575,7 @@ if __name__ == "__main__":
             histnames = [h for h in res["data"]["baseline"].keys() if h.startswith("hist__")]
             #for var in [k for k in res["vbf"][analysis].keys() if k.startswith("hist_")]:
             for var in histnames:
-                if var in ["hist_puweight", "hist__dijet_inv_mass_gen"]:
+                if var in ["hist_puweight", "hist__dijet_inv_mass_gen", "hist__dnn_presel__dnn_pred"]:
                     continue
 
                 if ("h_peak" in var):

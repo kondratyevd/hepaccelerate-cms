@@ -51,6 +51,7 @@ def analyze_data(
     lepsf_id=None,
     lepsf_trig=None,
     dnn_model=None,
+    dnn_normfactors=None,
     jetmet_corrections=None,
     parameters={},
     parameter_set_name="",
@@ -298,7 +299,8 @@ def analyze_data(
         #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
         hists_dnn = {}
         dnn_prediction = None
-        dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model,
+        dnn_vars, dnn_prediction, weights_dnn = compute_fill_dnn(
+           parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors,
            scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
            weights_selected, hists_dnn)
        
@@ -315,12 +317,12 @@ def analyze_data(
 
 
         #Assign the final analysis discriminator based on category
-        scalars["final_discriminator"] = NUMPY_LIB.zeros_like(higgs_inv_mass)
+        #scalars["final_discriminator"] = NUMPY_LIB.zeros_like(higgs_inv_mass)
         if not (dnn_prediction is None):
-            inds_nonzero = NUMPY_LIB.nonzero(dnn_presel)[0]
-            if len(inds_nonzero) > 0:
-                ha.copyto_dst_indices(scalars["final_discriminator"], dnn_prediction, inds_nonzero)
-            scalars["final_discriminator"][category != 5] = 0
+            #inds_nonzero = NUMPY_LIB.nonzero(dnn_presel)[0]
+            #if len(inds_nonzero) > 0:
+            #    ha.copyto_dst_indices(scalars["final_discriminator"], dnn_prediction, inds_nonzero)
+            #scalars["final_discriminator"][category != 5] = 0
 
             #Add some additional debugging info to the DNN training ntuples
             dnn_vars["cat_index"] = category[dnn_presel]
@@ -328,7 +330,6 @@ def analyze_data(
             dnn_vars["lumi"] = scalars["luminosityBlock"][dnn_presel]
             dnn_vars["event"] = scalars["event"][dnn_presel]
             dnn_vars["dnn_pred"] = dnn_prediction
-
             #Save the DNN training ntuples as npy files
             if parameters["save_dnn_vars"] and jet_syst_name[0] == "nominal" and parameter_set_name == "baseline":
                 dnn_vars_np = {k: NUMPY_LIB.asnumpy(v) for k, v in dnn_vars.items()}
@@ -397,13 +398,13 @@ def analyze_data(
                     hists,
                     "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
                     jet_syst_name, leading_jet["pt"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(30, 200.0, 41))
+                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
                 
                 update_histograms_systematic(
                     hists,
                     "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
                     jet_syst_name, subleading_jet["pt"], weights_selected,
-                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(30, 200.0, 41))
+                    dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
 
                 update_histograms_systematic(
                     hists,
@@ -474,7 +475,7 @@ def run_analysis(
     args, outpath, datasets, parameters,
     chunksize, maxfiles,
     lumidata, lumimask, pu_corrections, rochester_corrections,
-    lepsf_iso, lepsf_id, lepsf_trig, dnn_model, jetmet_corrections):
+    lepsf_iso, lepsf_id, lepsf_trig, dnn_model, dnn_normfactors, jetmet_corrections):
 
     #Keep track of number of events
     nev_total = 0
@@ -582,6 +583,7 @@ def run_analysis(
                     lepsf_trig=lepsf_trig,
                     parameters=parameters,
                     dnn_model=dnn_model,
+                    dnn_normfactors=dnn_normfactors,
                     jetmet_corrections=jetmet_corrections,
                     do_sync = args.do_sync) 
 
@@ -1358,7 +1360,7 @@ def select_weights(weights, jet_systematic_scenario):
 # 1. Compute the DNN input variables in a given preselection
 # 2. Evaluate the DNN model
 # 3. Fill histograms with DNN inputs and output
-def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leading_muon, subleading_muon, leading_jet, subleading_jet, weights, hists):
+def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors, scalars, leading_muon, subleading_muon, leading_jet, subleading_jet, weights, hists):
     nev_dnn_presel = NUMPY_LIB.sum(dnn_presel)
 
     #for some reason, on the cuda backend, the sum does not return a simple number
@@ -1373,6 +1375,11 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leadi
     dnn_vars = dnn_variables(leading_muon_s, subleading_muon_s, leading_jet_s, subleading_jet_s, nsoft)
     if (not (dnn_model is None)) and nev_dnn_presel > 0:
         dnn_vars_arr = NUMPY_LIB.vstack([dnn_vars[k] for k in parameters["dnn_varlist_order"]]).T
+        
+        #Normalize the DNN with the normalization factors from preprocessing in training 
+        dnn_vars_arr -= dnn_normfactors[0]
+        dnn_vars_arr /= dnn_normfactors[1]
+
         #for TF, need to convert library to numpy, as it doesn't accept cupy arrays
         dnn_pred = NUMPY_LIB.array(dnn_model.predict(NUMPY_LIB.asnumpy(dnn_vars_arr), batch_size=10000)[:, 0])
     else:
@@ -1381,10 +1388,6 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, scalars, leadi
     #Fill the histograms with DNN inputs
     dnn_mask = NUMPY_LIB.ones(nev_dnn_presel, dtype=NUMPY_LIB.bool)
     weights_dnn = {k: w[dnn_presel] for k, w in weights.items()}
-    hists["hist__dnn_presel__dnn_pred"] = fill_with_weights(
-       dnn_pred, weights_dnn, dnn_mask,
-       NUMPY_LIB.linspace(*parameters["dnn_input_histogram_bins"]["dnn_pred"])
-    )
 
     for vn in parameters["dnn_varlist_order"]:
         subarr = dnn_vars[vn]
@@ -1983,7 +1986,7 @@ class InputGen:
         self.nthreads = nthreads
         self.cache_location = cache_location
         self.datapath = datapath
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=nthreads)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     def is_done(self):
         return (self.num_chunk == len(self.paths_chunks)) and (self.num_loaded == len(self.paths_chunks))
