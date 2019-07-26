@@ -68,7 +68,7 @@ def analyze_data(
     scalars = data["eventvars"]
     
     mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
-    
+
     #Compute integrated luminosity on data sample and apply golden JSON
     int_lumi = 0
     if not is_mc:
@@ -262,6 +262,7 @@ def analyze_data(
             parameters["jet_btag"][dataset_era],
             is_mc, use_cuda
         )
+
 
         pt_balance = ret_jet["dijet_pt"] / higgs_pt
 
@@ -551,10 +552,15 @@ def run_analysis(
                     t = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
                     t.start()
 
+            metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+            metrics_thread.start()
+
             rets = []
             num_processed = 0
            
             cache_metadata = []
+
+            tprev = time.time()
             #loop over all data, call the analyze function
             while num_processed < len(training_set_generator.paths_chunks):
 
@@ -566,8 +572,8 @@ def run_analysis(
                         break
                     train_batches_queue.put(ds)
 
-                #Progress indicator for each chunk of files
-                sys.stdout.write(".");sys.stdout.flush()
+                # #Progress indicator for each chunk of files
+                # sys.stdout.write(".");sys.stdout.flush()
 
                 #Process the dataset
                 ret, nev, memsize = event_loop(
@@ -583,7 +589,12 @@ def run_analysis(
                     parameters=parameters,
                     dnn_model=dnn_model,
                     jetmet_corrections=jetmet_corrections,
-                    do_sync = args.do_sync) 
+                    do_sync = args.do_sync)
+
+                tnext = time.time()
+                print("processed {0:.2E} ev/s".format(nev/float(tnext-tprev)))
+                sys.stdout.flush()
+                tprev = tnext
 
                 rets += [ret]
                 processed_size_mb += memsize
@@ -597,7 +608,6 @@ def run_analysis(
 
             #save output
             ret = sum(rets, Results({}))
-            print("luminosities", [r["baseline"]["int_lumi"] for r in rets])
             if is_mc:
                 ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
                 ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
@@ -605,8 +615,8 @@ def run_analysis(
     
     t1 = time.time()
     dt = t1 - t0
-    print("Overall processed {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
-        nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
+    print("Overall processed {dataset} {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
+        dataset=dataset_name+"_"+dataset_era, nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
     )
 
     bench_ret = {}
@@ -1983,7 +1993,7 @@ class InputGen:
         self.nthreads = nthreads
         self.cache_location = cache_location
         self.datapath = datapath
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=nthreads)
+        self.executor = None
 
     def is_done(self):
         return (self.num_chunk == len(self.paths_chunks)) and (self.num_loaded == len(self.paths_chunks))
@@ -2162,26 +2172,45 @@ def optimize_categories(sig_samples, bkg_samples, varlist, datasets, lumidata, l
 def parse_nvidia_smi():
     """Returns the GPU symmetric multiprocessor and memory usage in %
     """
-    nvidia_smi.nvmlInit()
-    handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
-    res = nvidia_smi.nvmlDeviceGetUtilizationRates(handle) 
-    return {"gpu": res.gpu, "mem": res.memory}
+    try:
+        import nvidia_smi
+        nvidia_smi.nvmlInit()
+        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+        res = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+        return {"gpu": res.gpu, "mem": res.memory}
+    except Exception as e:
+        return {"gpu": 0, "mem": 0}
 
 def threaded_metrics(tokill, train_batches_queue):
     c = psutil.disk_io_counters()
     bytes_read_start = c.read_bytes
+    thisproc = psutil.Process()
+    logfile = open("metrics.log", "a")
 
     while not tokill(): 
-        dt = 0.5
+        dt = 1.0
         
         c = psutil.disk_io_counters()
 
         bytes_read_speed = (c.read_bytes - bytes_read_start)/dt/1024.0/1024.0
         bytes_read_start = c.read_bytes
 
+        cpu_pct = thisproc.cpu_percent()
+        memory_info = thisproc.memory_info()
         d = parse_nvidia_smi()
-        print("metrics", time.time(), "IO speed", bytes_read_speed, "MB/s", "CPU", psutil.cpu_percent(), "GPU", d["gpu"], "GPUmem", d["mem"], "qsize", train_batches_queue.qsize())
-        sys.stdout.flush()
+
+        print("metrics time=", time.time(),
+              " disk_io=", bytes_read_speed,
+              " cpu_percent=", cpu_pct,
+              # "cpu_iowait=", cpu_times.iowait,
+              " rss=", memory_info.rss,
+              " gpu_util=", d["gpu"],
+              " gpu_mem=", d["mem"],
+              " queue_size=", train_batches_queue.qsize(),
+              sep="", file=logfile
+            )
+        logfile.flush()
         time.sleep(dt)
 
+    logfile.close()
     return

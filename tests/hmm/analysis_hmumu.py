@@ -179,36 +179,6 @@ datasets_sync = [
     ("ggh", "2016", "data/ggh_nano_2016.root", True)
 ]
 
-#dataset cross sections in picobarns
-cross_sections = {
-    "dy": 5765.4,
-    "ggh": 0.009605,
-    "tth": 0.000110,
-    "vbf": 0.000823,
-    
-    "wmh": 0.000116,
-    "wph": 0.000183,
-    "zh": 0.000192,
-    
-    "ttjets_dl": 85.656,
-    "ttjets_sl": 687.0,
-    "ww_2l2nu": 5.595,
-    "wz_3lnu":  4.42965,
-    "wz_2l2q": 5.595,
-    "wz_1l1nu2q": 11.61,
-    "zz": 16.523
-}
-
-sig_samples = [
-    "ggh",
-    "vbf", "tth", "zh", "wmh", "wph"
-]
-bkg_samples = [
-    "dy",
-    "ttjets_sl", "ttjets_dl", "ww_2l2nu", "wz_3lnu", "wz_2l2q", "wz_1l1nu2q", "zz"
-]
-mc_samples = sig_samples + bkg_samples
-
 from coffea.lookup_tools import extractor
 from coffea.jetmet_tools import FactorizedJetCorrector
 from coffea.jetmet_tools import JetResolution
@@ -221,7 +191,7 @@ class JetMetCorrections:
         jec_tag_data,
         jer_tag,
         jmr_vals,
-        do_factorized_jec_unc=False):
+        do_factorized_jec_unc=True):
 
         extract = extractor()
         
@@ -305,6 +275,9 @@ if __name__ == "__main__":
         import cupy
         cupy.cuda.set_allocator(None)
         cupy.cuda.set_pinned_memory_allocator(None)
+        cuda_device = cupy.cuda.Device(os.environ.get("CUDA_VISIBLE_DEVICES", 0))
+        print("Using CUDA device {0}".format(cuda_device))
+        cuda_device.use()
 
     #Use sync-only datasets
     if args.do_sync:
@@ -413,7 +386,7 @@ if __name__ == "__main__":
 
             "extra_electrons_pt": 20,
             "extra_electrons_eta": 2.5,
-            "extra_electrons_iso": 0.4,
+            "extra_electrons_iso": 0.4, #Check if we want to apply this
             "extra_electrons_id": "mvaFall17V1Iso_WP90",
 
             "save_dnn_vars": True,
