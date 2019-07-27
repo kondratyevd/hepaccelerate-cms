@@ -27,7 +27,7 @@ cd /data/jpata/hmumu/hepaccelerate-cms/
 python3 tests/hmm/analysis_hmumu.py \
     --action analyze --maxfiles $MAXFILES --chunksize 1 \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
-    --datapath /storage/user/jpata/ --era 2018 \
+    --datapath /storage/user/jpata/ --era 2016 --era 2017 --era 2018 \
     --dataset $DATASET --do-factorized-jec \
     --out $workdir/$OUTDIR
 

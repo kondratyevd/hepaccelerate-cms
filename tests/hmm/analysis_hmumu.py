@@ -431,7 +431,7 @@ if __name__ == "__main__":
                 "Higgs_pt": (0, 200, 20),
                 "Higgs_eta": (-3, 3, 20),
                 "Higgs_mass": (110, 150, 20),
-                "dnn_pred": (0, 1, 20),
+                "dnn_pred": (0, 1, 41),
             },
 
             "categorization_trees": {}
