@@ -154,6 +154,9 @@ def analyze_data(
         weights["puWeight__down"] = weights["nominal"] * pu_weights_down
         weights["nominal"] = weights["nominal"] * pu_weights
 
+    for wn in weights.keys():
+        print("w", wn, weights[wn].mean())
+
     #Apply Rochester corrections to leading and subleading muon momenta
     if parameters["do_rochester_corrections"]:
         if debug:
@@ -701,9 +704,12 @@ def run_analysis(
 
             #save output
             ret = sum(rets, Results({}))
+            assert(ret["baseline"]["int_lumi"] == sum([r["baseline"]["int_lumi"] for r in rets]))
+            print(ret["baseline"]["int_lumi"])
             if is_mc:
                 ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
                 ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
+                print(dataset_name, ret["genEventSumw"])
             ret.save_json("{0}/{1}_{2}.json".format(outpath, dataset_name, dataset_era))
     
     t1 = time.time()

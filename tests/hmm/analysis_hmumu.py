@@ -437,9 +437,9 @@ if __name__ == "__main__":
             "categorization_trees": {}
         },
     }
-    analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
-    analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
-    analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
+    #analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
+    #analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
+    #analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
 
     lumimask = {
         "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
