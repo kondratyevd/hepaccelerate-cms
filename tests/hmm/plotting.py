@@ -578,7 +578,6 @@ if __name__ == "__main__":
                     weight_xs[mc_samp] = cross_sections[mc_samp] * int_lumi / genweights[mc_samp]
             
             histnames = [h for h in res["data"]["baseline"].keys() if h.startswith("hist__")]
-            histnames = ["hist__dimuon__leading_muon_pt", "hist__dimuon__subleading_muon_pt"]
             for var in histnames:
                 if var in ["hist_puweight", "hist__dijet_inv_mass_gen", "hist__dnn_presel__dnn_pred"]:
                     continue

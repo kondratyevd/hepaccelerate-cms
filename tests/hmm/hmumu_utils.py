@@ -77,11 +77,14 @@ def analyze_data(
         lumis = NUMPY_LIB.asnumpy(scalars["luminosityBlock"])
         if not (lumimask is None):
            #keep events passing golden JSON
-           mask_lumi_golden_json = np.invert(lumimask[dataset_era](runs, lumis))
+           mask_lumi_golden_json = lumimask[dataset_era](runs, lumis)
+           assert(mask_lumi_golden_json.sum()/len(mask_lumi_golden_json) > 0.5)
            mask_events = mask_events & NUMPY_LIB.array(mask_lumi_golden_json) 
            #get integrated luminosity in this file
            if not (lumidata is None):
                int_lumi = get_int_lumi(runs, lumis, mask_lumi_golden_json, lumidata[dataset_era])
+           print(int_lumi, mask_events.sum(), len(mask_events))
+           import pdb;pdb.set_trace()
     check_and_fix_qgl(jets)
 
     #output histograms 
