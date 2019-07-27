@@ -83,8 +83,6 @@ def analyze_data(
            #get integrated luminosity in this file
            if not (lumidata is None):
                int_lumi = get_int_lumi(runs, lumis, mask_lumi_golden_json, lumidata[dataset_era])
-           print(int_lumi, mask_events.sum(), len(mask_events))
-           import pdb;pdb.set_trace()
     check_and_fix_qgl(jets)
 
     #output histograms 
@@ -242,11 +240,6 @@ def analyze_data(
     n_additional_muons = ha.sum_in_offsets(muons, ret_mu["additional_muon_sel"], ret_mu["selected_events"], ret_mu["additional_muon_sel"], dtype=NUMPY_LIB.int8)
     n_additional_electrons = ha.sum_in_offsets(electrons, ret_el["additional_electron_sel"], ret_mu["selected_events"], ret_el["additional_electron_sel"], dtype=NUMPY_LIB.int8)
     n_additional_leptons = n_additional_muons + n_additional_electrons
-
-    # fill_muon_hists(
-    #     hists, scalars, weights, ret_mu, higgs_inv_mass,
-    #     leading_muon, subleading_muon, parameters,
-    #     masswindow_z_peak, NUMPY_LIB)
 
     #This computes the JEC, JER and associated systematics
     print("event selection eff based on 2 muons", ret_mu["selected_events"].sum() / float(len(mask_events)))
@@ -1645,28 +1638,6 @@ class JetTransformer:
             return {("nominal", ""): self.pt_jec}
         else:
             raise KeyError("Variation name {0} was not defined in JetMetCorrections corrections".format(variation_name))
-
-def fill_muon_hists(hists, scalars, weights, ret_mu, inv_mass,
-    leading_muon, subleading_muon, parameters,
-    masswindow, NUMPY_LIB):
-
-    hists["hist__dimuon__inv_mass"] = fill_with_weights(
-        inv_mass, weights,
-        ret_mu["selected_events"], NUMPY_LIB.linspace(50, 200, 101)
-    )
-
-    #get histograms of leading and subleading muon momenta
-    hists["hist__dimuon__leading_muon_pt"] = fill_with_weights(leading_muon["pt"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0.0, 200.0, 101))
-    hists["hist__dimuon__subleading_muon_pt"] = fill_with_weights(subleading_muon["pt"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0.0, 200.0, 101))
-
-    hists["hist__dimuon__leading_muon_eta"] = fill_with_weights(
-        leading_muon["eta"], weights, ret_mu["selected_events"],
-        NUMPY_LIB.linspace(-4.0, 4.0, 101)
-    )
-    hists["hist__dimuon__subleading_muon_eta"] = fill_with_weights(
-        subleading_muon["eta"], weights, ret_mu["selected_events"],
-        NUMPY_LIB.linspace(-4.0, 4.0, 101)
-    )
 
 def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_trig, use_cuda, dataset_era, NUMPY_LIB, debug):
     sfs = []
