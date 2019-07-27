@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--datasets', action='append', help='Dataset names process', type=str, required=False)
     parser.add_argument('--pinned', action='store_true', help='Use CUDA pinned memory')
     parser.add_argument('--do-sync', action='store_true', help='run only synchronization datasets')
+    parser.add_argument('--do-factorized-jec', action='store_true', help='Enables factorized JEC, disables most validation plots')
     args = parser.parse_args()
     return args
 
@@ -191,7 +192,7 @@ class JetMetCorrections:
         jec_tag_data,
         jer_tag,
         jmr_vals,
-        do_factorized_jec_unc=True):
+        do_factorized_jec=True):
 
         extract = extractor()
         
@@ -250,7 +251,7 @@ class JetMetCorrections:
 
         junc_names = ['{0}_Uncertainty_AK4PFchs'.format(jec_tag)]
         #levels = []
-        if do_factorized_jec_unc:
+        if do_factorized_jec:
             for name in dir(evaluator):
 
                 #factorized sources
@@ -263,7 +264,7 @@ if __name__ == "__main__":
 
     # Do you want to use yappi to profile the python code
     do_prof = False
-    do_tensorflow = True
+    do_tensorflow = False
 
     args = parse_args()
 
@@ -372,6 +373,7 @@ if __name__ == "__main__":
             "jet_id": "tight",
             "jet_puid": "loose",
             "jet_btag": {"2016": 0.6321, "2017": 0.4941, "2018": 0.4184},
+            "do_factorized_jec": args.do_factorized_jec,
 
             "cat5_dijet_inv_mass": 400.0,
             "cat5_abs_jj_deta_cut": 2.5,
@@ -536,7 +538,8 @@ if __name__ == "__main__":
                 },
                 #jer_tag="Summer16_25nsV1_MC",
                 jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8]),
+                jmr_vals=[1.0, 1.2, 0.8],
+                do_factorized_jec=True),
         },
         "2017": {
             "Fall17_17Nov2017_V6":
@@ -551,7 +554,8 @@ if __name__ == "__main__":
                 },
                 #jer_tag="Fall17_V3_MC",
                 jer_tag=None,
-                jmr_vals=[1.09, 1.14, 1.04]),
+                jmr_vals=[1.09, 1.14, 1.04],
+                do_factorized_jec=True),
         },
         "2018": {
             "Autumn18_V8":
@@ -565,7 +569,8 @@ if __name__ == "__main__":
                 },
                 #jer_tag="Fall17_V3_MC",
                 jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8]),
+                jmr_vals=[1.0, 1.2, 0.8],
+                do_factorized_jec=True),
             "Autumn18_V16":
                 JetMetCorrections(
                 jec_tag="Autumn18_V16_MC",
@@ -577,7 +582,8 @@ if __name__ == "__main__":
                 },
                 #jer_tag="Fall17_V3_MC",
                 jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8]),
+                jmr_vals=[1.0, 1.2, 0.8],
+                do_factorized_jec=True),
         }
     }
     #Run baseline analysis
@@ -597,6 +603,7 @@ if __name__ == "__main__":
         yappi.start(builtins=True)
 
     dnn_model = None
+    dnn_normfactors = None
     if do_tensorflow:
         #disable GPU for tensorflow
         if not args.use_cuda: 
@@ -607,7 +614,7 @@ if __name__ == "__main__":
             import tensorflow as tf
             config = tf.ConfigProto()
             config.gpu_options.allow_growth = True
-            config.gpu_options.visible_device_list = "0"
+            config.gpu_options.visible_device_list = os.environ["CUDA_VISIBLE_DEVICES"]
             set_session(tf.Session(config=config))
         
         #load DNN model

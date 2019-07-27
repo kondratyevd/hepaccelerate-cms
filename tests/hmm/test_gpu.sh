@@ -11,13 +11,14 @@ export NUMBA_ENABLE_AVX=1
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS 
 export SINGULARITY_IMAGE=/storage/user/jpata/cupy.simg
-export MAXFILES=10
+export MAXFILES=5
 export CUDA_VISIBLE_DEVICES=0
 export CACHE_LOCATION=/storage/user/jpata/hmm/cache
 
 function run_code() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 -m cProfile -s cumtime \
         tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 5 \
+        --do-factorized-jec \
         --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
         --pinned --async-data --nthreads $NTHREADS --era 2018 --out out2 --dataset $1
 }
