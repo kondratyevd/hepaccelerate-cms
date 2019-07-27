@@ -709,7 +709,7 @@ def run_analysis(
             if is_mc:
                 ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
                 ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
-                print(dataset_name, ret["genEventSumw"])
+                print(dataset_name, "sum genweights", ret["genEventSumw"])
             ret.save_json("{0}/{1}_{2}.json".format(outpath, dataset_name, dataset_era))
     
     t1 = time.time()
@@ -2036,9 +2036,6 @@ class InputGen:
 
     def is_done(self):
         return (self.num_chunk == len(self.paths_chunks)) and (self.num_loaded == len(self.paths_chunks))
- 
-    def __iter__(self):
-        return self.generator()
 
     #did not make this a generator to simplify handling the thread locks
     def nextone(self):
@@ -2049,6 +2046,7 @@ class InputGen:
             #print("Generator is done: num_chunk={0}, len(self.paths_chunks)={1}".format(self.num_chunk, len(self.paths_chunks)))
             return None
 
+        print("Loading dataset chunk {0}, {1}".format(self.num_chunk, self.paths_chunks[self.num_chunk]))
         ds = create_dataset(
             self.name, self.paths_chunks[self.num_chunk],
             self.is_mc, self.cache_location, self.datapath, self.is_mc)
@@ -2061,8 +2059,6 @@ class InputGen:
 
         # Load caches on multiple threads
         ds.from_cache(executor=self.executor, verbose=False)
-
-        # Merge data arrays from multiple files into one big array
         ds.merge_inplace()
 
         # Increment the counter for number of loaded datasets

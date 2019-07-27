@@ -3,7 +3,7 @@
 set -e
 # Any subsequent(*) commands which fail will cause the shell script to exit immediately
 
-export NTHREADS=24
+export NTHREADS=4
 export HEPACCELERATE_CUDA=1
 export PYTHONPATH=coffea:hepaccelerate:.
 export NUMBA_THREADING_LAYER=tbb
@@ -11,12 +11,12 @@ export NUMBA_ENABLE_AVX=1
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS 
 export SINGULARITY_IMAGE=/storage/user/jpata/cupy.simg
-export MAXFILES=5
-export CUDA_VISIBLE_DEVICES=0
+export MAXFILES=20
+export CUDA_VISIBLE_DEVICES=1
 export CACHE_LOCATION=/storage/user/jpata/hmm/cache
 
 function run_code() {
-    singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 -m cProfile -s cumtime \
+    singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
         tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 5 \
         --do-factorized-jec \
         --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
@@ -34,8 +34,19 @@ function run_code_smallsamples() {
         --dataset tth
 }
 
+function run_code_basic() {
+    singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
+        tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 5 \
+        --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
+        --pinned --async-data --nthreads $NTHREADS --era 2018 --out out_gpu \
+        --do-factorized-jec \
+        --dataset ggh --dataset vbf --dataset dy --dataset data
+}
+
+run_code_basic
+
 #run_code vbf
-run_code dy_m105_160_vbf_amc
+#run_code dy_m105_160_vbf_amc
 
 #run_code_smallsamples
 #run_code data

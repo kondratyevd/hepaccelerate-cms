@@ -264,7 +264,7 @@ if __name__ == "__main__":
 
     # Do you want to use yappi to profile the python code
     do_prof = False
-    do_tensorflow = False
+    do_tensorflow = True
 
     args = parse_args()
 
@@ -608,13 +608,20 @@ if __name__ == "__main__":
         #disable GPU for tensorflow
         if not args.use_cuda: 
             os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+            from keras.backend.tensorflow_backend import set_session
             import tensorflow as tf
+            config = tf.ConfigProto()
+            config.intra_op_parallelism_threads=args.nthreads
+            config.inter_op_parallelism_threads=args.nthreads
+            set_session(tf.Session(config=config))
         else:
             from keras.backend.tensorflow_backend import set_session
             import tensorflow as tf
             config = tf.ConfigProto()
-            config.gpu_options.allow_growth = True
-            config.gpu_options.visible_device_list = os.environ["CUDA_VISIBLE_DEVICES"]
+            config.gpu_options.allow_growth = False
+            config.gpu_options.per_process_gpu_memory_fraction = 0.2
+            config.intra_op_parallelism_threads=args.nthreads
+            config.inter_op_parallelism_threads=args.nthreads
             set_session(tf.Session(config=config))
         
         #load DNN model
