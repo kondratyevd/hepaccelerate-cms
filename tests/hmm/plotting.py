@@ -157,8 +157,8 @@ def make_pdf_plot(args):
     if var.startswith("hist_numjet"):
         a1.set_xticks(hd["edges"])
 
-    a1.text(0.015,0.99, r"CMS internal, $L = {0:.2f}\ fb^{{-1}}$ ({1})".format(
-        int_lumi/1000.0, datataking_year) + 
+    a1.text(0.015,0.99, r"CMS internal, $L = {0:.2f}\ pb^{{-1}}$ ({1})".format(
+        int_lumi, datataking_year) + 
         "\nd/m={0:.2f}".format(np.sum(hd.contents)/np.sum(htot_nominal.contents)) + 
         ", wd={0:.2E}".format(wasserstein_distance(htot_nominal.contents/np.sum(htot_nominal.contents), hd.contents/np.sum(hd.contents))),
         horizontalalignment='left',
@@ -227,6 +227,7 @@ def create_variated_histos(
     variations=["puWeight", "jes", "jer"]):
  
     if not baseline in hdict.keys():
+        import pdb;pdb.set_trace()
         raise KeyError("baseline histogram missing")
     
     hbase = copy.deepcopy(hdict[baseline])
@@ -537,8 +538,8 @@ if __name__ == "__main__":
             mc_samples_load.add(process)
     mc_samples_load = list(mc_samples_load)
 
-    for era in ["2016", "2017", "2018"]:
-    #for era in ["2018"]:
+    #for era in ["2016", "2017", "2018"]:
+    for era in ["2018"]:
         res = {}
         genweights = {}
         weight_xs = {}
@@ -549,7 +550,10 @@ if __name__ == "__main__":
         dd = "{0}/{1}".format(input_folder, analysis) 
         res["data"] = json.load(open(dd + "/data_{0}.json".format(era)))
         for mc_samp in mc_samples_load:
-            res[mc_samp] = json.load(open(dd + "/{0}_{1}.json".format(mc_samp, era)))
+            try:
+                res[mc_samp] = json.load(open(dd + "/{0}_{1}.json".format(mc_samp, era)))
+            except Exception as e:
+                print("Skipping {0}".format(mc_samp))
 
         analyses = [k for k in res["data"].keys() if not k in ["cache_metadata", "num_events"]]
 
@@ -568,12 +572,13 @@ if __name__ == "__main__":
 
             #in inverse picobarns
             int_lumi = res["data"]["baseline"]["int_lumi"]
-            for mc_samp in mc_samples_load:
-                genweights[mc_samp] = res[mc_samp]["genEventSumw"]
-                weight_xs[mc_samp] = cross_sections[mc_samp] * int_lumi / genweights[mc_samp]
+            for mc_samp in res.keys():
+                if mc_samp != "data":
+                    genweights[mc_samp] = res[mc_samp]["genEventSumw"]
+                    weight_xs[mc_samp] = cross_sections[mc_samp] * int_lumi / genweights[mc_samp]
             
             histnames = [h for h in res["data"]["baseline"].keys() if h.startswith("hist__")]
-            #for var in [k for k in res["vbf"][analysis].keys() if k.startswith("hist_")]:
+            histnames = ["hist__dimuon__leading_muon_pt", "hist__dimuon__subleading_muon_pt"]
             for var in histnames:
                 if var in ["hist_puweight", "hist__dijet_inv_mass_gen", "hist__dnn_presel__dnn_pred"]:
                     continue
@@ -582,8 +587,10 @@ if __name__ == "__main__":
                     mc_samples = categories["h_peak"]["datacard_processes"]
                 elif ("h_sideband" in var):
                     mc_samples = categories["h_sideband"]["datacard_processes"]
-                else:
+                elif ("z_peak" in var):
                     mc_samples = categories["z_peak"]["datacard_processes"]
+                else:
+                    mc_samples = categories["dimuon"]["datacard_processes"]
 
                 create_datacard_combine(
                     res,

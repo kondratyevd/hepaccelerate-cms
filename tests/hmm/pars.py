@@ -1,4 +1,12 @@
 categories = {
+    "dimuon": {
+        "datacard_processes" : [
+            "ggh", "dy",
+        ],
+        "plot_processes": {
+            "dy": ["dy_0j", "dy_1j", "dy_2j"],
+        }
+    },
     "z_peak": {
         "datacard_processes" : [
             "ggh",

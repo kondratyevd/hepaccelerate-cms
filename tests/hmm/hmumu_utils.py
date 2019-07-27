@@ -173,6 +173,7 @@ def analyze_data(
         parameters["muon_eta"], parameters["muon_iso"],
         parameters["muon_id"][dataset_era], parameters["muon_trigger_match_dr"]
     )
+    print("muon selection eff", ret_mu["selected_muons"].sum() / float(muons.numobjects()))
     
     # Create arrays with just the leading and subleading particle contents for easier management
     mu_attrs = ["pt", "eta", "phi", "mass", "pdgId", "nTrackerLayers"]
@@ -191,6 +192,18 @@ def analyze_data(
             use_cuda, dataset_era, NUMPY_LIB, debug)
         weights["leptonsf_off"] = weights["nominal"]
         weights["nominal"] = weights["nominal"] * sf_tot
+    
+    update_histograms_systematic(
+        hists,
+        "hist__dimuon__leading_muon_pt",
+        "nominal", leading_muon["pt"], weights,
+        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101))
+    
+    update_histograms_systematic(
+        hists,
+        "hist__dimuon__subleading_muon_pt",
+        "nominal", subleading_muon["pt"], weights,
+        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101))
 
     hists["hist__dimuon__npvs"] = fill_with_weights(
         scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101))
@@ -246,7 +259,7 @@ def analyze_data(
     print("jet selection eff based on id", selected_jets_id.sum() / float(len(selected_jets_id)))
 
     jets_passing_id = jets.select_objects(selected_jets_id)
-
+    
     print("doing nominal jec")
     jet_systematics = JetTransformer(
         jets_passing_id, scalars,
@@ -254,10 +267,13 @@ def analyze_data(
         jetmet_corrections[dataset_era][parameters["jec_tag"][dataset_era]],
         NUMPY_LIB, use_cuda, is_mc)
 
-    syst_to_consider = ["nominal", "Total"]
-    if parameters["do_factorized_jec"]:
-        syst_to_consider = syst_to_consider + jet_systematics.jet_uncertainty_names
+    syst_to_consider = ["nominal"]
+    if is_mc:
+        syst_to_consider += ["Total"]
+        if parameters["do_factorized_jec"]:
+            syst_to_consider = syst_to_consider + jet_systematics.jet_uncertainty_names
 
+    syst_to_consider = syst_to_consider[:5]
     print("entering jec loop with {0}".format(syst_to_consider))
     ret_jet_nominal = None
     #Now actually call the JEC computation for each scenario
@@ -284,6 +300,7 @@ def analyze_data(
                 parameters["jet_btag"][dataset_era],
                 is_mc, use_cuda
             )
+   
             #print("jet selection eff based on ID & pt", ret_jet["selected_jets"].sum() / float(len(ret_jet["selected_jets"])))
 
             #Find the first two genjets in the event that are not matched to gen-leptons
@@ -318,14 +335,24 @@ def analyze_data(
             ret_jet["dijet_inv_mass"][ret_jet["num_jets"] < 2] = -1000.0
 
             # Get the data for the leading and subleading jets as contiguous vectors
-            leading_jet = jets_passing_id.select_nth(0, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
-            subleading_jet = jets_passing_id.select_nth(1, ret_mu["selected_events"], ret_jet["selected_jets"], attributes=["pt", "eta", "phi", "mass", "qgl"])
+            leading_jet = jets_passing_id.select_nth(
+                0, ret_mu["selected_events"], ret_jet["selected_jets"],
+                attributes=["pt", "eta", "phi", "mass", "qgl"])
+            subleading_jet = jets_passing_id.select_nth(
+                1, ret_mu["selected_events"], ret_jet["selected_jets"],
+                attributes=["pt", "eta", "phi", "mass", "qgl"])
 
             if do_sync and jet_syst_name[0] == "nominal":
                 sync_printout(ret_mu, muons, scalars,
                     leading_muon, subleading_muon, higgs_inv_mass,
                     n_additional_muons, n_additional_electrons,
                     ret_jet, leading_jet, subleading_jet)
+            
+            update_histograms_systematic(
+                hists,
+                "hist__dimuon__dijet_inv_mass",
+                jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
+                ret_mu["selected_events"], NUMPY_LIB.linspace(0, 1000, 41))
 
             #compute DNN input variables in 2 muon, >=2jet region
             dnn_presel = (
@@ -418,7 +445,7 @@ def analyze_data(
                     ("h_peak", masswindow_h_peak, parameters["masswindow_h_peak"]),
                     ("h_sideband", masswindow_h_sideband, parameters["masswindow_h_region"]),
                     ("z_peak", masswindow_z_peak, parameters["masswindow_z_peak"])]:
-
+                
                 if not parameters["do_factorized_jec"]:
                     update_histograms_systematic(
                         hists,
@@ -447,13 +474,13 @@ def analyze_data(
                         "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, "dnn_pred"),
                         jet_syst_name, dnn_vars["dnn_pred"], weights_dnn,
                         (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(*hb))
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
+                        jet_syst_name, higgs_inv_mass, weights_selected,
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
 
                     if not parameters["do_factorized_jec"]:
-                        update_histograms_systematic(
-                            hists,
-                            "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
-                            jet_syst_name, higgs_inv_mass, weights_selected,
-                            dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
 
                         update_histograms_systematic(
                             hists,
@@ -1010,7 +1037,7 @@ def update_histograms_systematic(hists, hist_name, systematic_name, values, weig
     if hist_name not in hists:
         hists[hist_name] = {}
     ret = fill_with_weights(values, weight_dict, mask, bins)
-    if systematic_name[0] == "nominal":
+    if systematic_name[0] == "nominal" or systematic_name == "nominal":
         hists[hist_name].update(ret)
     else:
         if systematic_name[1] == "":
@@ -1521,12 +1548,6 @@ class JetTransformer:
         self.corr_jec = NUMPY_LIB.array(self.corr_jec)
         self.pt_jec = NUMPY_LIB.array(self.raw_pt) * self.corr_jec 
 
-        if is_mc and not (self.jetmet_corrections.jer is None):
-            smear_n, smear_u, smear_d = self.apply_jer()
-
-            self.pt_jec_jer = self.pt_jec * smear_n
-            self.pt_jec_jer = self.pt_jec * smear_n
-
     def apply_jer(self):
         #This is done only on CPU
             resos = self.jetmet_corrections.jer.getResolution(
@@ -1567,7 +1588,7 @@ class JetTransformer:
             
             if self.use_cuda:
                 run_idx = int(run_idx)
-            msk = scalars["run_index"] == run_idx
+            msk = self.scalars["run_index"] == run_idx
             
             #find the jets in the events that pass this run index cut
             jets_msk = NUMPY_LIB.zeros(self.jets.numobjects(), dtype=NUMPY_LIB.bool)
