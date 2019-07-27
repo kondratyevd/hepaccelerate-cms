@@ -272,7 +272,7 @@ def analyze_data(
         if parameters["do_factorized_jec"]:
             syst_to_consider = syst_to_consider + jet_systematics.jet_uncertainty_names
 
-    syst_to_consider = syst_to_consider[:5]
+    syst_to_consider = syst_to_consider
     print("entering jec loop with {0}".format(syst_to_consider))
     ret_jet_nominal = None
     #Now actually call the JEC computation for each scenario

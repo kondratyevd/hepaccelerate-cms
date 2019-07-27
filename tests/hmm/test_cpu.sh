@@ -33,7 +33,8 @@ function run_code_basic() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
         tests/hmm/analysis_hmumu.py --action analyze --maxfiles $MAXFILES --chunksize 1 \
         --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
-        --pinned --async-data --nthreads $NTHREADS --era 2018 --out out3
+        --pinned --async-data --nthreads $NTHREADS --era 2018 --out out3 \
+        --do-factorized-jec
 }
 
 run_code_basic
