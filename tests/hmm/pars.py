@@ -162,7 +162,7 @@ runmap_numerical = {
 runmap_numerical_r = {v: k for k, v in runmap_numerical.items()}
 
 #Used to scale the genweight to prevent a numerical overflow
-genweight_scalefactor = 1
+genweight_scalefactor = 1e-5
 
 catnames = {
     "dimuon_invmass_z_peak_cat5": "dimuons, Z region, cat 5",
