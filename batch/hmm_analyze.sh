@@ -8,8 +8,8 @@ env
 
 workdir=`pwd`
 
-export USER=$1
-export NTHREADS=32
+export DATASET=$1
+export NTHREADS=4
 export PYTHONPATH=coffea:hepaccelerate:. 
 export HEPACCELERATE_CUDA=0
 export KERAS_BACKEND=tensorflow
@@ -25,12 +25,12 @@ echo "numjob", $NUMJOB
 cd /data/jpata/hmumu/hepaccelerate-cms/
 
 python3 tests/hmm/analysis_hmumu.py \
-    --action analyze --maxfiles $MAXFILES --chunksize 5 \
+    --action analyze --maxfiles $MAXFILES --chunksize 1 \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
     --datapath /storage/user/jpata/ --era 2018 \
-    --dataset data --dataset dy --dataset vbf --do-factorized-jec \
+    --dataset $DATASET --do-factorized-jec \
     --out $workdir/$OUTDIR
 
-cp -R $workdir/$OUTDIR /storage/user/$USER/hmm/$OUTDIR
+cp -R $workdir/$OUTDIR /storage/user/$USER/hmm/
 ls $CACHE_PATH
 echo "job done"

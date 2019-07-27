@@ -1,6 +1,5 @@
 Universe = vanilla
 Executable = hmm_analyze.sh
-Arguments = $ENV(USER)
 Log = logs/example_job.$(Cluster).log
 Output = logs/example_job.out.$(Cluster).$(Process)
 Error = logs/example_job.err.$(Cluster).$(Process)
@@ -15,7 +14,89 @@ Requirements=(TARGET.OpSysAndVer=="CentOS7" && regexp("blade.*", TARGET.Machine)
 run_as_owner = True
 x509userproxy = $ENV(X509_USER_PROXY)
 RequestDisk = 4
-RequestMemory = 32*1000
-RequestCpus = 32
+RequestMemory = 20000
+RequestCpus = 4
 
-Queue 1
+Environment = USER=$ENV(USER)
+
+#Arguments = dy
+#Queue
+#
+#Arguments = dy_0j
+#Queue
+#
+#Arguments = dy_1j
+#Queue
+#
+#Arguments = dy_2j
+#Queue
+
+Arguments = data
+Queue
+
+#Arguments = ttjets_sl
+#Queue
+#
+#Arguments = ttjets_dl
+#Queue
+#
+#Arguments = dy_m105_160_amc
+#Queue
+#
+#Arguments = dy_m105_160_vbf_amc
+#Queue
+#
+#Arguments = ewk_lljj_mll50_mjj120
+#Queue
+#
+#Arguments = ewk_lljj_mll105_160
+#Queue
+#
+#Arguments = ww_2l2nu
+#Queue
+#
+#Arguments = wz_3lnu
+#Queue
+#
+#Arguments = wz_2l2q
+#Queue
+#        
+#Arguments = ggh
+#Queue
+#
+#Arguments = vbf
+#Queue
+#        
+#Arguments = ttw
+#Queue
+#        
+#Arguments = ttz
+#Queue
+#        
+#Arguments = st_t_top
+#Queue
+#        
+#Arguments = st_t_antitop
+#Queue
+#        
+#Arguments = st_tw_antitop
+#Queue
+#        
+#Arguments = st_tw_top
+#Queue
+#        
+#Arguments = zz
+#Queue
+#        
+#Arguments = wmh
+#Queue
+#        
+#Arguments = wph
+#Queue
+#        
+#Arguments = zh
+#Queue
+#        
+#Arguments = tth
+#Queue
+#        

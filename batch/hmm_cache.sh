@@ -8,7 +8,6 @@ env
 
 workdir=`pwd`
 
-export USER=jpata
 export NTHREADS=8
 export PYTHONPATH=coffea:hepaccelerate:. 
 export HEPACCELERATE_CUDA=0
@@ -17,7 +16,7 @@ export KERAS_BACKEND=tensorflow
 export CACHE_PATH=/storage/user/$USER/hmm/cache2
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
-export MAXFILES=10
+export MAXFILES=-1
 
 cd /data/jpata/hmumu/hepaccelerate-cms/
 
