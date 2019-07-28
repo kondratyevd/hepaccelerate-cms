@@ -78,7 +78,9 @@ def analyze_data(
         if not (lumimask is None):
            #keep events passing golden JSON
            mask_lumi_golden_json = lumimask[dataset_era](runs, lumis)
-           assert(mask_lumi_golden_json.sum()/len(mask_lumi_golden_json) > 0.5)
+           lumi_eff = mask_lumi_golden_json.sum()/len(mask_lumi_golden_json)
+           if not (lumi_eff > 0.5):
+               print("WARNING, data file had low lumi efficiency", lumi_eff)  
            mask_events = mask_events & NUMPY_LIB.array(mask_lumi_golden_json) 
            #get integrated luminosity in this file
            if not (lumidata is None):
