@@ -14,6 +14,7 @@ from pars import catnames, varnames, analysis_names
 from scipy.stats import wasserstein_distance
 
 import argparse
+import pickle
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis plotting')
@@ -118,7 +119,7 @@ def make_pdf_plot(args):
     hmc = []
     
     for mc_samp in mc_samples:
-        h = load_hist(res[mc_samp][analysis][var][weight])
+        h = res[mc_samp][analysis][var][weight]
         h = h * weight_xs[mc_samp]
         h.label = "{0} ({1:.1E})".format(mc_samp, np.sum(h.contents))
                 
@@ -132,7 +133,7 @@ def make_pdf_plot(args):
         for unc in uncertainties:
             if (unc + sdir) in res[mc_samp][analysis][var]:
                 htot_variated[unc + sdir] = sum([
-                    load_hist(res[mc_samp][analysis][var][unc + sdir])* weight_xs[mc_samp] for mc_samp in mc_samples
+                    res[mc_samp][analysis][var][unc + sdir]* weight_xs[mc_samp] for mc_samp in mc_samples
                 ], hist_template)
                 hdelta_quadrature += (htot_nominal.contents - htot_variated[unc+sdir].contents)**2
             
@@ -232,7 +233,7 @@ def create_variated_histos(
     
     hbase = copy.deepcopy(hdict[baseline])
     ret = Results(OrderedDict())
-    ret["nominal"] = Histogram.from_dict(hbase)
+    ret["nominal"] = hbase
     for variation in variations:
         for vdir in ["up", "down"]:
             print("create_variated_histos", variation, vdir)
@@ -247,7 +248,7 @@ def create_variated_histos(
                 hret = hbase
             else:
                 hret = hdict[sname]
-            ret[sname2] = Histogram.from_dict(hret)
+            ret[sname2] = hret
     return ret
 
 def create_datacard(dict_procs, parameter_name, all_processes, histname, baseline, variations, weight_xs):
@@ -538,8 +539,8 @@ if __name__ == "__main__":
             mc_samples_load.add(process)
     mc_samples_load = list(mc_samples_load)
 
-    #for era in ["2016", "2017", "2018"]:
-    for era in ["2018"]:
+    for era in ["2016", "2017", "2018"]:
+    #for era in ["2018"]:
         res = {}
         genweights = {}
         weight_xs = {}
@@ -548,10 +549,10 @@ if __name__ == "__main__":
         analysis = "results"
         input_folder = cmdline_args.input
         dd = "{0}/{1}".format(input_folder, analysis) 
-        res["data"] = json.load(open(dd + "/data_{0}.json".format(era)))
+        res["data"] = pickle.load(open(dd + "/data_{0}.pkl".format(era), "rb"))
         for mc_samp in mc_samples_load:
             try:
-                res[mc_samp] = json.load(open(dd + "/{0}_{1}.json".format(mc_samp, era)))
+                res[mc_samp] = pickle.load(open(dd + "/{0}_{1}.pkl".format(mc_samp, era), "rb"))
             except Exception as e:
                 print("Skipping {0}".format(mc_samp))
 
@@ -610,7 +611,7 @@ if __name__ == "__main__":
                 weight_scenarios = ["nominal"]
                 for weight in weight_scenarios:
                     try:
-                        hdata = load_hist(res["data"][analysis][var]["nominal"])
+                        hdata = res["data"][analysis][var]["nominal"]
                     except KeyError:
                         print("Histogram {0} not found for data, skipping".format(var))
                         continue

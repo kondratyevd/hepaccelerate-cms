@@ -34,7 +34,6 @@ def parse_args():
     parser.add_argument('--chunksize', '-c', action='store', help='Number of files to process simultaneously (larger is faster)', default=5, type=int)
     parser.add_argument('--cache-location', action='store', help='Cache location', default='./mycache', type=str)
     parser.add_argument('--out', action='store', help='Output location', default='out', type=str)
-    parser.add_argument('--era', action='append', help='Dataset eras to process', type=str, required=True)
     parser.add_argument('--datasets', action='append', help='Dataset names process', type=str, required=False)
     parser.add_argument('--pinned', action='store_true', help='Use CUDA pinned memory')
     parser.add_argument('--do-sync', action='store_true', help='run only synchronization datasets')
@@ -477,10 +476,9 @@ if __name__ == "__main__":
     #Filter datasets by era
     datasets_to_process = []
     for ds in datasets:
-        if ds[1] in args.era:
-            if args.datasets is None or ds[0] in args.datasets:
-                datasets_to_process += [ds]
-                print("Will process dataset", ds)
+        if args.datasets is None or ds[0] in args.datasets:
+            datasets_to_process += [ds]
+            print("Will process dataset", ds)
     datasets = datasets_to_process
 
     hmumu_utils.NUMPY_LIB, hmumu_utils.ha = choose_backend(args.use_cuda)
@@ -675,7 +673,8 @@ if __name__ == "__main__":
                 os.makedirs(args.out + "/results")
             except FileExistsError as e:
                 pass
-            results.save_json(args.out + "/results/{0}_{1}.json".format(dataset_name, dataset_era))
+            with open(args.out + "/results/{0}_{1}.pkl".format(dataset_name, dataset_era), "wb") as fi:
+                pickle.dump(results, fi, protocol=pickle.HIGHEST_PROTOCOL) 
 
     if do_prof:
         stats = yappi.get_func_stats()

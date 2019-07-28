@@ -7,9 +7,10 @@ ls /storage
 env
 
 workdir=`pwd`
+tar xf jobfiles.tgz
 
-export DATASET=$1
-export NTHREADS=4
+export JOBFILE=$1
+export NTHREADS=8
 export PYTHONPATH=coffea:hepaccelerate:. 
 export HEPACCELERATE_CUDA=0
 export KERAS_BACKEND=tensorflow
@@ -17,19 +18,18 @@ export KERAS_BACKEND=tensorflow
 export CACHE_PATH=/storage/user/$USER/hmm/cache
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
-export MAXFILES=-1
-export OUTDIR=out
-
-echo "numjob", $NUMJOB
+export OUTDIR=out2
 
 cd /data/jpata/hmumu/hepaccelerate-cms/
 
 python3 tests/hmm/analysis_hmumu.py \
-    --action analyze --maxfiles $MAXFILES --chunksize 1 \
+    --action analyze \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
-    --datapath /storage/user/jpata/ --era 2016 --era 2017 --era 2018 \
-    --dataset $DATASET --do-factorized-jec \
-    --out $workdir/$OUTDIR
+    --datapath /storage/user/jpata/ \
+    --out $workdir/$OUTDIR \
+    --do-factorized-jec \
+    --jobfile $workdir/jobfiles/$JOBFILE.json
+
 
 cp -R $workdir/$OUTDIR /storage/user/$USER/hmm/
 ls $CACHE_PATH

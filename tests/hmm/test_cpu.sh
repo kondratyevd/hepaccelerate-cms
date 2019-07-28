@@ -10,7 +10,7 @@ export NUMBA_THREADING_LAYER=tbb
 export NUMBA_ENABLE_AVX=1
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS 
-export SINGULARITY_IMAGE=/storage/user/jpata/cupy.simg
+export SINGULARITY_IMAGE=/storage/user/jpata/cupy2.simg
 export MAXFILES=10
 export CACHE_LOCATION=/storage/user/jpata/hmm/cache
 
@@ -35,13 +35,19 @@ function run_code_smallsamples() {
 
 function run_code_basic() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
-        tests/hmm/analysis_hmumu.py --maxfiles 2 --chunksize 5 \
+        tests/hmm/analysis_hmumu.py --maxfiles 1 --chunksize 5 --action cache --action jobfiles --action analyze \
         --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
-        --nthreads $NTHREADS --era 2018 --out out_cpu --async-data \
-        --dataset ggh --dataset vbf --dataset dy --dataset data
+        --nthreads $NTHREADS --out out_cpu --async-data
 }
 
-run_code_basic
+function run_code_merge() {
+    singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
+        tests/hmm/analysis_hmumu.py --maxfiles 1 --chunksize 5 --action merge \
+        --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
+        --nthreads $NTHREADS --out /storage/user/jpata/hmm/out
+}
+
+run_code_merge
 
 #run_code vbf
 #run_code dy_m105_160_vbf_amc
