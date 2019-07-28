@@ -564,167 +564,166 @@ def analyze_data(
  
     return ret
 
+def run_cache(
+    cmdline_args,
+    outpath,
+    job_descriptions,
+    parameters):
+
+    print("run_cache", len(job_descriptions))
+    nev_total = 0
+    nev_loaded = 0
+    t0 = time.time()
+            
+    processed_size_mb = 0
+
+    for job_desc in job_descriptions:
+        filenames_all = job_desc["filenames"]
+        assert(len(filenames_all)>0)
+        dataset_name = job_desc["dataset_name"]
+        dataset_era = job_desc["dataset_era"]
+        is_mc = job_desc["is_mc"]
+
+        datastructure = create_datastructure(is_mc, dataset_era)
+
+        #Used for preselection in the cache
+        hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
+
+        _nev_total, _processed_size_mb = cache_data(
+            filenames_all, dataset_name, datastructure,
+            cmdline_args.cache_location, cmdline_args.datapath, is_mc,
+            hlt_bits, cmdline_args.nthreads)
+
+        nev_total += _nev_total
+        processed_size_mb += _processed_size_mb
+
+    t1 = time.time()
+    dt = t1 - t0
+    print("Overall processed {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
+        nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
+    )
+
+    bench_ret = {}
+    bench_ret.update(cmdline_args.__dict__)
+    bench_ret["hostname"] = os.uname()[1]
+    bench_ret["nev_total"] = nev_total
+    bench_ret["total_time"] = dt
+    bench_ret["evspeed"] = nev_total/dt/1000/1000
+    with open(cmdline_args.out + "/analysis_benchmarks.txt", "a") as of:
+        of.write(json.dumps(bench_ret) + '\n')
+
 #Main analysis entry point
 def run_analysis(
-    args, outpath, datasets, parameters,
-    chunksize, maxfiles,
-    lumidata, lumimask, pu_corrections, rochester_corrections,
-    lepsf_iso, lepsf_id, lepsf_trig, dnn_model, dnn_normfactors, jetmet_corrections):
+    cmdline_args,
+    outpath,
+    job_descriptions,
+    parameters,
+    analysis_corrections):
 
     #Keep track of number of events
     nev_total = 0
     nev_loaded = 0
     t0 = time.time()
-    
-    if "cache" in args.action:
-       print("Running the 'cache' step of the analysis, ROOT files will be opened and branches will be uncompressed")
-       print("Will retrieve dataset filenames based on existing ROOT files on filesystem in datapath={0}".format(args.datapath)) 
-       try:
-           os.makedirs(args.cache_location)
-       except Exception as e:
-           pass
-       filenames_cache = {}
-       for dataset_name, dataset_era, globpattern, is_mc in datasets:
-           filenames_all = glob.glob(args.datapath + globpattern, recursive=True)
-           filenames_all = [fn for fn in filenames_all if not "Friend" in fn]
-           filenames_cache[dataset_name + "_" + dataset_era] = [fn.replace(args.datapath, "") for fn in filenames_all]
-   
-       #save all dataset filenames to a json file 
-       print("Creating a json dump of all the dataset filenames")
-       with open(args.cache_location + "/datasets.json", "w") as fi:
-           fi.write(json.dumps(filenames_cache, indent=2))
-    else:
-       print("Running the 'analyze' step of the analysis, loading cached branch data and using it in physics code via analyze_data()")
-       print("Loading list of filenames loaded from {0}/datasets.json".format(args.cache_location))
-       filenames_cache = json.load(open(args.cache_location + "/datasets.json", "r"))
-
-    for dataset, filenames in filenames_cache.items():
-        print("dataset {0} consists of {1} ROOT files".format(dataset, len(filenames)))
-        if len(filenames) == 0:
-            raise Exception("No files found for dataset {0}".format(dataset))
             
     processed_size_mb = 0
-    for dataset_name, dataset_era, globpattern, is_mc in datasets:
-        filenames_all = filenames_cache[dataset_name + "_" + dataset_era]
-        filenames_all = [args.datapath + "/" + fn for fn in filenames_all]
- 
-        print("Processing dataset {0}_{1}".format(dataset_name, dataset_era))
-        if maxfiles[dataset_era] > 0:
-            mf = maxfiles[dataset_era]
-            #if dataset_name == "data":
-            #    mf = 10*mf
-            filenames_all = filenames_all[:mf]
 
-        datastructure = create_datastructure(is_mc, dataset_era)
+    #Create a thread that will load data in the background
+    training_set_generator = InputGen(
+        job_descriptions,
+        cmdline_args.cache_location,
+        cmdline_args.datapath)
 
-        if "cache" in args.action:
+    threadk = thread_killer()
+    threadk.set_tokill(False)
+    train_batches_queue = Queue(maxsize=10)
+    
+    #Start the thread if using a multithreaded approach
+    if cmdline_args.async_data:
+        input_thread = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
+        input_thread.start()
 
-            #Used for preselection in the cache
-            hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
-                
-            _nev_total, _processed_size_mb = cache_data(
-                filenames_all, dataset_name, datastructure,
-                args.cache_location, args.datapath, is_mc,
-                hlt_bits,
-                nworkers=args.nthreads)
-            nev_total += _nev_total
-            processed_size_mb += _processed_size_mb
+    # metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+    # metrics_thread.start()
 
-        elif "analyze" in args.action:
+    rets = []
+    num_processed = 0
+   
+    cache_metadata = []
 
-            #Create a thread that will load data in the background
-            training_set_generator = InputGen(
-                dataset_name, dataset_era, list(filenames_all), datastructure,
-                args.nthreads, chunksize[dataset_era], args.cache_location, args.datapath)
-            threadk = thread_killer()
-            threadk.set_tokill(False)
-            train_batches_queue = Queue(maxsize=10)
-            
-            #Start the thread if using a multithreaded approach
-            if args.async_data:
-                for _ in range(1):
-                    t = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
-                    t.start()
+    tprev = time.time()
+    #loop over all data, call the analyze function
+    while num_processed < len(training_set_generator):
 
-            #metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
-            #metrics_thread.start()
+        # In case we are processing data synchronously, just load the dataset here
+        # and put to queue.
+        if not cmdline_args.async_data:
+            ds = training_set_generator.nextone()
+            if ds is None:
+                break
+            train_batches_queue.put(ds)
 
-            rets = []
-            num_processed = 0
-           
-            cache_metadata = []
+        # #Progress indicator for each chunk of files
+        # sys.stdout.write(".");sys.stdout.flush()
 
-            tprev = time.time()
-            #loop over all data, call the analyze function
-            while num_processed < len(training_set_generator.paths_chunks):
+        #Process the dataset
+        ret, ds, nev, memsize = event_loop(
+            train_batches_queue,
+            cmdline_args.use_cuda,
+            verbose=False,
+            lumimask=analysis_corrections.lumimask,
+            lumidata=analysis_corrections.lumidata,
+            pu_corrections=analysis_corrections.pu_corrections,
+            rochester_corrections=analysis_corrections.rochester_corrections,
+            lepsf_iso=analysis_corrections.lepsf_iso,
+            lepsf_id=analysis_corrections.lepsf_id,
+            lepsf_trig=analysis_corrections.lepsf_trig,
+            parameters=parameters,
+            dnn_model=analysis_corrections.dnn_model,
+            dnn_normfactors=analysis_corrections.dnn_normfactors,
+            jetmet_corrections=analysis_corrections.jetmet_corrections,
+            do_sync = cmdline_args.do_sync)
 
-                # In case we are processing data synchronously, just load the dataset here
-                # and put to queue.
-                if not args.async_data:
-                    ds = training_set_generator.nextone()
-                    if ds is None:
-                        break
-                    train_batches_queue.put(ds)
+        tnext = time.time()
+        print("processed {0:.2E} ev/s".format(nev/float(tnext-tprev)))
+        sys.stdout.flush()
+        tprev = tnext
 
-                # #Progress indicator for each chunk of files
-                # sys.stdout.write(".");sys.stdout.flush()
+        with open("{0}/{1}_{2}_{3}.pkl".format(outpath, ds.name, ds.era, ds.num_chunk), "wb") as fi:
+            pickle.dump(ret, fi, protocol=pickle.HIGHEST_PROTOCOL)
 
-                #Process the dataset
-                ret, nev, memsize = event_loop(
-                    train_batches_queue,
-                    args.use_cuda,
-                    verbose=False, is_mc=is_mc, lumimask=lumimask,
-                    lumidata=lumidata,
-                    pu_corrections=pu_corrections,
-                    rochester_corrections=rochester_corrections,
-                    lepsf_iso=lepsf_iso,
-                    lepsf_id=lepsf_id,
-                    lepsf_trig=lepsf_trig,
-                    parameters=parameters,
-                    dnn_model=dnn_model,
-                    dnn_normfactors=dnn_normfactors,
-                    jetmet_corrections=jetmet_corrections,
-                    do_sync = args.do_sync)
+        processed_size_mb += memsize
+        nev_total += sum([md["numevents"] for md in ret["cache_metadata"]])
+        nev_loaded += nev
+        num_processed += 1
+    print()
 
-                tnext = time.time()
-                print("processed {0:.2E} ev/s".format(nev/float(tnext-tprev)))
-                sys.stdout.flush()
-                tprev = tnext
+    #clean up threads
+    threadk.set_tokill(True)
+    #metrics_thread.join() 
 
-                rets += [ret]
-                processed_size_mb += memsize
-                nev_total += sum([md["numevents"] for md in ret["cache_metadata"]])
-                nev_loaded += nev
-                num_processed += 1
-            print()
-
-            #clean up threads
-            threadk.set_tokill(True)
-            #metrics_thread.join() 
-
-            #save output
-            ret = sum(rets, Results({}))
-            assert(ret["baseline"]["int_lumi"] == sum([r["baseline"]["int_lumi"] for r in rets]))
-            print(ret["baseline"]["int_lumi"])
-            if is_mc:
-                ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
-                ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
-                print(dataset_name, "sum genweights", ret["genEventSumw"])
-            ret.save_json("{0}/{1}_{2}.json".format(outpath, dataset_name, dataset_era))
+    # #save output
+    # ret = sum(rets, Results({}))
+    # assert(ret["baseline"]["int_lumi"] == sum([r["baseline"]["int_lumi"] for r in rets]))
+    # print(ret["baseline"]["int_lumi"])
+    # if is_mc:
+    #     ret["genEventSumw"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]])
+    #     ret["genEventSumw2"] = genweight_scalefactor * sum([md["precomputed_results"]["genEventSumw2"] for md in ret["cache_metadata"]])
+    #     print(dataset_name, "sum genweights", ret["genEventSumw"])
+    # ret.save_json("{0}/{1}_{2}.json".format(outpath, dataset_name, dataset_era))
     
     t1 = time.time()
     dt = t1 - t0
-    print("Overall processed {dataset} {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
-        dataset=dataset_name+"_"+dataset_era, nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
+    print("Overall processed {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
+        nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
     )
 
     bench_ret = {}
-    bench_ret.update(args.__dict__)
+    bench_ret.update(cmdline_args.__dict__)
     bench_ret["hostname"] = os.uname()[1]
     bench_ret["nev_total"] = nev_total
     bench_ret["total_time"] = dt
     bench_ret["evspeed"] = nev_total/dt/1000/1000
-    with open(args.out + "/analysis_benchmarks.txt", "a") as of:
+    with open(cmdline_args.out + "/analysis_benchmarks.txt", "a") as of:
         of.write(json.dumps(bench_ret) + '\n')
 
 def event_loop(train_batches_queue, use_cuda, **kwargs):
@@ -749,6 +748,7 @@ def event_loop(train_batches_queue, use_cuda, **kwargs):
             dataset_era = ds.era,
             dataset_name = ds.name,
             dataset_num_chunk = ds.num_chunk,
+            is_mc = ds.is_mc,
             **kwargs)
     ret["num_events"] = len(ds)
 
@@ -761,8 +761,13 @@ def event_loop(train_batches_queue, use_cuda, **kwargs):
         mempool.free_all_blocks()
         pinned_mempool.free_all_blocks()
      
-    ret["cache_metadata"] = ds.cache_metadata 
-    return ret, len(ds), ds.memsize()/1024.0/1024.0
+    ret["cache_metadata"] = ds.cache_metadata
+    if ds.is_mc:
+        ret["genEventSumw"] = genweight_scalefactor * sum([
+            md["precomputed_results"]["genEventSumw"] for md in ret["cache_metadata"]
+        ])
+    ret = Results(ret)
+    return ret, ds, len(ds), ds.memsize()/1024.0/1024.0
 
 def get_histogram(data, weights, bins):
     """Given N-unit vectors of data and weights, returns the histogram in bins
@@ -1827,14 +1832,16 @@ def cache_data(filenames, name, datastructures, cache_location, datapath, is_mc,
     if nworkers == 1:
         tot_ev = 0
         tot_mb = 0
-        for result in map(cache_data_multiproc_worker, [(name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+        for result in map(cache_data_multiproc_worker, [
+            (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
             tot_ev += result[0]
             tot_mb += result[1]
     else:
         with concurrent.futures.ProcessPoolExecutor(max_workers=nworkers) as executor:
             tot_ev = 0
             tot_mb = 0
-            for result in executor.map(cache_data_multiproc_worker, [(name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+            for result in executor.map(cache_data_multiproc_worker, [
+                (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
                 tot_ev += result[0]
                 tot_mb += result[1]
     return tot_ev, tot_mb
@@ -1849,7 +1856,7 @@ def func_filename_precompute_mc(filename):
     return ret
  
 def create_dataset(name, filenames, datastructures, cache_location, datapath, is_mc):
-    ds = Dataset(name, filenames, datastructures, cache_location=cache_location, datapath=datapath, treename="Events")
+    ds = Dataset(name, filenames, datastructures, cache_location=cache_location, datapath=datapath, treename="Events", is_mc=is_mc)
     if is_mc:
         ds.func_filename_precompute = func_filename_precompute_mc
     return ds
@@ -1878,6 +1885,7 @@ def cache_data_multiproc_worker(args):
 
     #Skip loading this file if cache already done
     if ds.check_cache():
+        print("Cache on file {0} is complete, skipping".format(filename))
         return 0, 0
 
     ds.load_root()
@@ -2020,45 +2028,53 @@ class thread_killer(object):
             self.to_kill = tokill
 
 class InputGen:
-    def __init__(self, name, era, paths, is_mc, nthreads, chunksize, cache_location, datapath):
-        self.name = name
-        self.era = era
-        self.paths_chunks = list(chunks(paths, chunksize))
+    def __init__(self, job_descriptions, cache_location, datapath):
+
+        self.job_descriptions = job_descriptions
         self.chunk_lock = threading.Lock()
         self.loaded_lock = threading.Lock()
         self.num_chunk = 0
         self.num_loaded = 0
-        self.is_mc = is_mc
-        self.nthreads = nthreads
+
         self.cache_location = cache_location
         self.datapath = datapath
-        self.executor = None
 
     def is_done(self):
-        return (self.num_chunk == len(self.paths_chunks)) and (self.num_loaded == len(self.paths_chunks))
+        return (self.num_chunk == len(self)) and (self.num_loaded == len(self))
 
     #did not make this a generator to simplify handling the thread locks
     def nextone(self):
         self.chunk_lock.acquire()
 
-        if self.num_chunk > 0 and self.num_chunk == len(self.paths_chunks):
+        if self.num_chunk > 0 and self.num_chunk == len(self):
             self.chunk_lock.release()
-            #print("Generator is done: num_chunk={0}, len(self.paths_chunks)={1}".format(self.num_chunk, len(self.paths_chunks)))
+            print("Generator is done: num_chunk={0}, len(self.job_descriptions)={1}".format(self.num_chunk, len(self)))
             return None
 
-        print("Loading dataset chunk {0}, {1}".format(self.num_chunk, self.paths_chunks[self.num_chunk]))
-        ds = create_dataset(
-            self.name, self.paths_chunks[self.num_chunk],
-            self.is_mc, self.cache_location, self.datapath, self.is_mc)
+        job_desc = self.job_descriptions[self.num_chunk]
+        print("Loading dataset {0} job desc {1}, {2}".format(
+            job_desc["dataset_name"], self.num_chunk, job_desc["filenames"]))
 
-        ds.era = self.era
+        datastructures = create_datastructure(job_desc["is_mc"], job_desc["dataset_era"])
+
+        ds = create_dataset(
+            job_desc["dataset_name"],
+            job_desc["filenames"],
+            datastructures,
+            self.cache_location,
+            self.datapath,
+            job_desc["is_mc"])
+
+        ds.era = job_desc["dataset_era"]
         ds.numpy_lib = numpy
-        ds.num_chunk = self.num_chunk
+        ds.num_chunk = job_desc["dataset_num_chunk"]
         self.num_chunk += 1
         self.chunk_lock.release()
 
         # Load caches on multiple threads
-        ds.from_cache(executor=self.executor, verbose=False)
+        ds.from_cache()
+
+        #Merge data arrays to one big array
         ds.merge_inplace()
 
         # Increment the counter for number of loaded datasets
@@ -2070,139 +2086,165 @@ class InputGen:
     def __call__(self):
         return self.__iter__()
 
+    def __len__(self):
+        return len(self.job_descriptions)
+
+
+def create_dataset_jobfiles(
+    dataset_name, dataset_era,
+    filenames, is_mc, chunksize, outpath):
+    try:
+        os.makedirs(outpath + "/jobfiles")
+    except Exception as e:
+        pass
+
+    ijob = 0
+    for files_chunk in chunks(filenames, chunksize):
+        job_description = {
+            "dataset_name": dataset_name,
+            "dataset_era": dataset_era,
+            "filenames": files_chunk,
+            "is_mc": is_mc,
+            "dataset_num_chunk": ijob,
+        }
+        with open(outpath + "/jobfiles/{0}_{1}_{2}.json".format(dataset_name, dataset_era, ijob), "w") as fi:
+            fi.write(json.dumps(job_description, indent=2))
+
+        ijob += 1
+
 
 ###
 ### Functions not currently used
 ###
 
-def significance_templates(sig_samples, bkg_samples, rets, analysis, histogram_names, do_plots=False, ntoys=1):
+# def significance_templates(sig_samples, bkg_samples, rets, analysis, histogram_names, do_plots=False, ntoys=1):
      
-    Zs = []
-    Zs_naive = []
-    if do_plots:
-        for k in histogram_names:
-            plt.figure(figsize=(4,4))
-            ax = plt.axes()
-            plt.title(k)
-            for samp in sig_samples:
-                h = rets[samp][analysis][k]["puWeight"]
-                plot_hist_step(ax, h.edges, 100*h.contents, 100*np.sqrt(h.contents_w2), kwargs_step={"label":samp})
-            for samp in bkg_samples:
-                h = rets[samp][analysis][k]["puWeight"]
-                plot_hist_step(ax, h.edges, h.contents, np.sqrt(h.contents_w2), kwargs_step={"label":samp})
+#     Zs = []
+#     Zs_naive = []
+#     if do_plots:
+#         for k in histogram_names:
+#             plt.figure(figsize=(4,4))
+#             ax = plt.axes()
+#             plt.title(k)
+#             for samp in sig_samples:
+#                 h = rets[samp][analysis][k]["puWeight"]
+#                 plot_hist_step(ax, h.edges, 100*h.contents, 100*np.sqrt(h.contents_w2), kwargs_step={"label":samp})
+#             for samp in bkg_samples:
+#                 h = rets[samp][analysis][k]["puWeight"]
+#                 plot_hist_step(ax, h.edges, h.contents, np.sqrt(h.contents_w2), kwargs_step={"label":samp})
 
-    #         for name in ["ggh", "tth", "vbf", "wmh", "wph", "zh"]:
-    #             plot_hist(100*rets[name][analysis][k]["puWeight"], label="{0} ({1:.2E})".format(name, np.sum(rets[name][k]["puWeight"].contents)))
-    #         plot_hist(rets["dy"][k]["puWeight"], color="black", marker="o",
-    #             label="DY ({0:.2E})".format(np.sum(rets["dy"][k]["puWeight"].contents)), linewidth=0, elinewidth=1
-    #         )
-            plt.legend(frameon=False, ncol=2)
-            ymin, ymax = ax.get_ylim()
-            ax.set_ylim(ymin, 5*ymax)
+#     #         for name in ["ggh", "tth", "vbf", "wmh", "wph", "zh"]:
+#     #             plot_hist(100*rets[name][analysis][k]["puWeight"], label="{0} ({1:.2E})".format(name, np.sum(rets[name][k]["puWeight"].contents)))
+#     #         plot_hist(rets["dy"][k]["puWeight"], color="black", marker="o",
+#     #             label="DY ({0:.2E})".format(np.sum(rets["dy"][k]["puWeight"].contents)), linewidth=0, elinewidth=1
+#     #         )
+#             plt.legend(frameon=False, ncol=2)
+#             ymin, ymax = ax.get_ylim()
+#             ax.set_ylim(ymin, 5*ymax)
     
-    for i in range(ntoys):
-        arrs_sig = []
-        arrs_bkg = []
-        for hn in histogram_names:
-            arrs = {}
-            for samp in sig_samples + bkg_samples:
-                if ntoys == 1:
-                    arrs[samp] = rets[samp][analysis][hn]["puWeight"].contents,
-                else:
-                    arrs[samp] = np.random.normal(
-                        rets[samp][analysis][hn]["puWeight"].contents,
-                        np.sqrt(rets[samp][analysis][hn]["puWeight"].contents_w2)
-                    )
+#     for i in range(ntoys):
+#         arrs_sig = []
+#         arrs_bkg = []
+#         for hn in histogram_names:
+#             arrs = {}
+#             for samp in sig_samples + bkg_samples:
+#                 if ntoys == 1:
+#                     arrs[samp] = rets[samp][analysis][hn]["puWeight"].contents,
+#                 else:
+#                     arrs[samp] = np.random.normal(
+#                         rets[samp][analysis][hn]["puWeight"].contents,
+#                         np.sqrt(rets[samp][analysis][hn]["puWeight"].contents_w2)
+#                     )
         
-            arr_sig = np.sum([arrs[s] for s in sig_samples])
-            arr_bkg = np.sum([arrs[s] for s in bkg_samples])
-            arrs_sig += [arr_sig]
-            arrs_bkg += [arr_bkg]
+#             arr_sig = np.sum([arrs[s] for s in sig_samples])
+#             arr_bkg = np.sum([arrs[s] for s in bkg_samples])
+#             arrs_sig += [arr_sig]
+#             arrs_bkg += [arr_bkg]
         
-        arr_sig = np.hstack(arrs_sig)
-        arr_bkg = np.hstack(arrs_bkg)
+#         arr_sig = np.hstack(arrs_sig)
+#         arr_bkg = np.hstack(arrs_bkg)
 
-        Z = sig_q0_asimov(arr_sig, arr_bkg)
-        Zs += [Z]
+#         Z = sig_q0_asimov(arr_sig, arr_bkg)
+#         Zs += [Z]
 
-        Znaive = sig_naive(arr_sig, arr_bkg)
-        Zs_naive += [Znaive]
-    return (np.mean(Zs), np.std(Zs)), (np.mean(Zs_naive), np.std(Zs_naive))
+#         Znaive = sig_naive(arr_sig, arr_bkg)
+#         Zs_naive += [Znaive]
+#     return (np.mean(Zs), np.std(Zs)), (np.mean(Zs_naive), np.std(Zs_naive))
 
-def compute_significances(sig_samples, bkg_samples, r, analyses):
-    Zs = []
-    for an in analyses:
-        templates = [c for c in r["ggh"][an].keys() if "__cat" in c and c.endswith("__inv_mass")]
-        (Z, eZ), (Zc, eZc) = significance_templates(
-            sig_samples, bkg_samples, r, an, templates, ntoys=1
-        )
-        Zs += [(an, Z)]
-    return sorted(Zs, key=lambda x: x[1], reverse=True)
+# def compute_significances(sig_samples, bkg_samples, r, analyses):
+#     Zs = []
+#     for an in analyses:
+#         templates = [c for c in r["ggh"][an].keys() if "__cat" in c and c.endswith("__inv_mass")]
+#         (Z, eZ), (Zc, eZc) = significance_templates(
+#             sig_samples, bkg_samples, r, an, templates, ntoys=1
+#         )
+#         Zs += [(an, Z)]
+#     return sorted(Zs, key=lambda x: x[1], reverse=True)
 
-def load_analysis(mc_samples, outpath, cross_sections, cat_trees):
-    res = {}
-    #res["data"] = json.load(open("../out/data_2017.json"))
-    #lumi = res["data"]["baseline"]["int_lumi"]
-    lumi = 41000.0
+# def load_analysis(mc_samples, outpath, cross_sections, cat_trees):
+#     res = {}
+#     #res["data"] = json.load(open("../out/data_2017.json"))
+#     #lumi = res["data"]["baseline"]["int_lumi"]
+#     lumi = 41000.0
 
-    rets = {
-        k: json.load(open("{0}/{1}.json".format(outpath, k))) for k in mc_samples
-    }
+#     rets = {
+#         k: json.load(open("{0}/{1}.json".format(outpath, k))) for k in mc_samples
+#     }
 
-    histograms = {}
-    for name in mc_samples:
-        ret = rets[name]
-        histograms[name] = {}
-        for analysis in cat_trees:
-            ret_an = rets[name]["baseline"][analysis]
-            histograms[name][analysis] = {}
-            for kn in ret_an.keys():
-                if kn.startswith("hist_"):
-                    histograms[name][analysis][kn] = {}
-                    for w in ret_an[kn].keys():
-                        h = (1.0 / ret["gen_sumweights"]) * lumi * cross_sections[name] * Histogram.from_dict(ret_an[kn][w])
-                        h.label = "{0} ({1:.1E})".format(name, np.sum(h.contents))
-                        histograms[name][analysis][kn][w] = h
+#     histograms = {}
+#     for name in mc_samples:
+#         ret = rets[name]
+#         histograms[name] = {}
+#         for analysis in cat_trees:
+#             ret_an = rets[name]["baseline"][analysis]
+#             histograms[name][analysis] = {}
+#             for kn in ret_an.keys():
+#                 if kn.startswith("hist_"):
+#                     histograms[name][analysis][kn] = {}
+#                     for w in ret_an[kn].keys():
+#                         h = (1.0 / ret["gen_sumweights"]) * lumi * cross_sections[name] * Histogram.from_dict(ret_an[kn][w])
+#                         h.label = "{0} ({1:.1E})".format(name, np.sum(h.contents))
+#                         histograms[name][analysis][kn][w] = h
 
-    return histograms
+#     return histograms
 
-def optimize_categories(sig_samples, bkg_samples, varlist, datasets, lumidata, lumimask, pu_corrections_2017, cross_sections, args, analysis_parameters, best_tree):
-    Zprev = 0
-    #Run optimization
-    for num_iter in range(args.niter):
-        outpath = "{0}/iter_{1}".format(args.out, num_iter)
+# def optimize_categories(sig_samples, bkg_samples, varlist, datasets, lumidata, lumimask, pu_corrections_2017, cross_sections, args, analysis_parameters, best_tree):
+#     Zprev = 0
+#     #Run optimization
+#     for num_iter in range(args.niter):
+#         outpath = "{0}/iter_{1}".format(args.out, num_iter)
 
-        try:
-            os.makedirs(outpath)
-        except FileExistsError as e:
-            pass
+#         try:
+#             os.makedirs(outpath)
+#         except FileExistsError as e:
+#             pass
 
-        analysis_parameters["baseline"]["categorization_trees"] = {}
-        #analysis_parameters["baseline"]["categorization_trees"] = {"varA": copy.deepcopy(varA), "varB": copy.deepcopy(varB)}
-        analysis_parameters["baseline"]["categorization_trees"]["previous_best"] = copy.deepcopy(best_tree)
+#         analysis_parameters["baseline"]["categorization_trees"] = {}
+#         #analysis_parameters["baseline"]["categorization_trees"] = {"varA": copy.deepcopy(varA), "varB": copy.deepcopy(varB)}
+#         analysis_parameters["baseline"]["categorization_trees"]["previous_best"] = copy.deepcopy(best_tree)
 
-        cut_trees = generate_cut_trees(100, varlist, best_tree)
-        for icut, dt in enumerate(cut_trees):
-            an_name = "an_cuts_{0}".format(icut)
-            analysis_parameters["baseline"]["categorization_trees"][an_name] = dt
+#         cut_trees = generate_cut_trees(100, varlist, best_tree)
+#         for icut, dt in enumerate(cut_trees):
+#             an_name = "an_cuts_{0}".format(icut)
+#             analysis_parameters["baseline"]["categorization_trees"][an_name] = dt
 
-        with open('{0}/parameters.pickle'.format(outpath), 'wb') as handle:
-            pickle.dump(analysis_parameters, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#         with open('{0}/parameters.pickle'.format(outpath), 'wb') as handle:
+#             pickle.dump(analysis_parameters, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        run_analysis(args, outpath, datasets, analysis_parameters, lumidata, lumimask, pu_corrections)
-        cut_trees = sorted(list(analysis_parameters["baseline"]["categorization_trees"].keys()), reverse=True)
-        r = load_analysis(sig_samples + bkg_samples, outpath, cross_sections, cut_trees)
-        print("computing expected significances")
-        Zs = compute_significances(sig_samples, bkg_samples, r, cut_trees)
+#         run_analysis(args, outpath, datasets, analysis_parameters, lumidata, lumimask, pu_corrections)
+#         cut_trees = sorted(list(analysis_parameters["baseline"]["categorization_trees"].keys()), reverse=True)
+#         r = load_analysis(sig_samples + bkg_samples, outpath, cross_sections, cut_trees)
+#         print("computing expected significances")
+#         Zs = compute_significances(sig_samples, bkg_samples, r, cut_trees)
 
-        with open('{0}/sigs.pickle'.format(outpath), 'wb') as handle:
-            pickle.dump(Zs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#         with open('{0}/sigs.pickle'.format(outpath), 'wb') as handle:
+#             pickle.dump(Zs, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
-        print("optimization", num_iter, Zs[:10], Zprev)
-        best_tree = copy.deepcopy(analysis_parameters["baseline"]["categorization_trees"][Zs[0][0]])
-        Zprev = Zs[0][1]
+#         print("optimization", num_iter, Zs[:10], Zprev)
+#         best_tree = copy.deepcopy(analysis_parameters["baseline"]["categorization_trees"][Zs[0][0]])
+#         Zprev = Zs[0][1]
 
-    return best_tree
+#     return best_tree
 
 def parse_nvidia_smi():
     """Returns the GPU symmetric multiprocessor and memory usage in %

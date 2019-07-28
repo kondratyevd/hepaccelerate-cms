@@ -11,21 +11,23 @@ import shutil
 
 import hepaccelerate.backend_cpu as backend_cpu
 from hepaccelerate.utils import choose_backend, LumiData, LumiMask
-from hepaccelerate.utils import Dataset
-from cmsutils.decisiontree import DecisionTreeNode, DecisionTreeLeaf
+from hepaccelerate.utils import Dataset, Results
 
 import hmumu_utils
-from hmumu_utils import run_analysis, load_analysis, make_random_tree, load_puhist_target, compute_significances, optimize_categories
+from hmumu_utils import run_analysis, run_cache, create_dataset_jobfiles, load_puhist_target
 from hmumu_lib import LibHMuMu, RochesterCorrections, LeptonEfficiencyCorrections
 
 import os
 from coffea.util import USE_CUPY
 import getpass
 
+import json
+import glob
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis')
     parser.add_argument('--async-data', action='store_true', help='Load data on a separate thread, faster but disable for debugging')
-    parser.add_argument('--action', '-a', action='append', help='List of analysis steps to do', choices=['cache', 'analyze'], required=True)
+    parser.add_argument('--action', '-a', action='append', help='List of analysis steps to do', choices=['cache', 'analyze', 'merge', 'jobfiles'], required=False, default=None)
     parser.add_argument('--nthreads', '-t', action='store', help='Number of CPU threads or workers to use', type=int, default=4, required=False)
     parser.add_argument('--datapath', '-p', action='store', help='Prefix to load NanoAOD data from, e.g. /mnt/hadoop', required=True)
     parser.add_argument('--maxfiles', '-m', action='store', help='Maximum number of files to process for each dataset', default=1, type=int)
@@ -37,7 +39,12 @@ def parse_args():
     parser.add_argument('--pinned', action='store_true', help='Use CUDA pinned memory')
     parser.add_argument('--do-sync', action='store_true', help='run only synchronization datasets')
     parser.add_argument('--do-factorized-jec', action='store_true', help='Enables factorized JEC, disables most validation plots')
+    parser.add_argument('--jobfiles', action='store', help='Jobfiles to process by the "cache" or "analyze" step', default=None, nargs='+', required=False)
     args = parser.parse_args()
+
+    if args.action is None:
+        args.action = ['analyze', 'merge', 'jobfiles']
+    
     return args
 
 # dataset nickname, datataking era, filename glob pattern, isMC
@@ -260,11 +267,196 @@ class JetMetCorrections:
 
         self.jesunc = JetCorrectionUncertainty(**{name: evaluator[name] for name in junc_names})
 
+class AnalysisCorrections:
+    def __init__(self, args, do_tensorflow):
+        self.lumimask = {
+            "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
+            "2017": LumiMask("data/Cert_294927-306462_13TeV_EOY2017ReReco_Collisions17_JSON.txt", np, backend_cpu),
+            "2018": LumiMask("data/Cert_314472-325175_13TeV_17SeptEarlyReReco2018ABC_PromptEraD_Collisions18_JSON.txt", np, backend_cpu),
+        }
+
+        self.lumidata = {
+            "2016": LumiData("data/lumi2016.csv"),
+            "2017": LumiData("data/lumi2017.csv"),
+            "2018": LumiData("data/lumi2018.csv")
+        }
+
+        self.pu_corrections = {
+            "2016": load_puhist_target("data/pileup/RunII_2016_data.root"),
+            "2017": load_puhist_target("data/pileup/RunII_2017_data.root"),
+            "2018": load_puhist_target("data/pileup/RunII_2018_data.root")
+        }
+        
+        self.libhmm = LibHMuMu()
+
+        print("Loading Rochester corrections")
+        #https://twiki.cern.ch/twiki/bin/viewauth/CMS/RochcorMuon
+        self.rochester_corrections = {
+            "2016": RochesterCorrections(self.libhmm, "data/RoccoR2016.txt"),
+            "2017": RochesterCorrections(self.libhmm, "data/RoccoR2017v1.txt"),
+            "2018": RochesterCorrections(self.libhmm, "data/RoccoR2018.txt")
+        }
+
+        #Weight ratios for computing scale factors
+        self.ratios_dataera = {
+            "2016": [0.5548, 1.0 - 0.5548],
+            "2017": 1.0,
+            "2018": 1.0
+        }
+
+        print("Loading lepton SF")
+        self.lepsf_iso = {
+            "2016": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2016/RunBCDEF_SF_ISO.root", "data/leptonSF/2016/RunGH_SF_ISO.root"],
+                ["NUM_LooseRelIso_DEN_MediumID_eta_pt", "NUM_LooseRelIso_DEN_MediumID_eta_pt"],
+                self.ratios_dataera["2016"]),
+            "2017": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2017/RunBCDEF_SF_ISO_syst.root"],
+                ["NUM_LooseRelIso_DEN_MediumID_pt_abseta"], [1.0]),
+            "2018": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2018/RunABCD_SF_ISO.root"],
+                ["NUM_LooseRelIso_DEN_MediumID_pt_abseta"], [1.0]),
+        }
+        self.lepsf_id = {
+            "2016": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2016/RunBCDEF_SF_ID.root", "data/leptonSF/2016/RunGH_SF_ID.root"],
+                ["NUM_MediumID_DEN_genTracks_eta_pt", "NUM_MediumID_DEN_genTracks_eta_pt"],
+                self.ratios_dataera["2016"]),
+            "2017": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2017/RunBCDEF_SF_ID_syst.root"],
+                ["NUM_MediumID_DEN_genTracks_pt_abseta"], [1.0]),
+            "2018": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2018/RunABCD_SF_ID.root"],
+                ["NUM_MediumID_DEN_TrackerMuons_pt_abseta"], [1.0])
+        }
+        self.lepsf_trig = {
+            "2016": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2016/EfficienciesAndSF_RunBtoF.root", "data/leptonSF/2016/EfficienciesAndSF_RunGtoH.root"],
+                ["IsoMu24_OR_IsoTkMu24_PtEtaBins/abseta_pt_ratio", "IsoMu24_OR_IsoTkMu24_PtEtaBins/abseta_pt_ratio"],
+                self.ratios_dataera["2016"]),
+            "2017": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2017/EfficienciesAndSF_RunBtoF_Nov17Nov2017.root"],
+                ["IsoMu27_PtEtaBins/pt_abseta_ratio"],
+                [1.0]
+            ),
+            "2018": LeptonEfficiencyCorrections(self.libhmm,
+                ["data/leptonSF/2018/EfficienciesAndSF_2018Data_AfterMuonHLTUpdate.root"],
+                ["IsoMu24_PtEtaBins/pt_abseta_ratio"],
+                [1.0]
+            ),
+        }
+
+        print("Loading JEC...")
+        #JEC files copied from
+        #https://github.com/cms-jet/JECDatabase/tree/master/textFiles
+        #Need to rename JECDatabase files as follows:
+        #  *_UncertaintySources_AK4PFchs.txt -> *_UncertaintySources_AK4PFchs.junc.txt
+        #  *_Uncertainty_AK4PFchs.txt -> *_Uncertainty_AK4PFchs.junc.txt
+        #JER files from
+        #  *_PtResolution_AK4PFchs.txt -> *_PtResolution_AK4PFchs.jr.txt
+        #  *_SF_AK4PFchs.txt -> *_SF_AK4PFchs.jersf.txt
+        self.jetmet_corrections = {
+            "2016": {
+                "Summer16_23Sep2016V4":
+                    JetMetCorrections(
+                    jec_tag="Summer16_23Sep2016V4_MC",
+                    jec_tag_data={
+                        "RunB": "Summer16_23Sep2016BCDV4_DATA",
+                        "RunC": "Summer16_23Sep2016BCDV4_DATA",
+                        "RunD": "Summer16_23Sep2016BCDV4_DATA",
+                        "RunE": "Summer16_23Sep2016EFV4_DATA",
+                        "RunF": "Summer16_23Sep2016EFV4_DATA",
+                        "RunG": "Summer16_23Sep2016GV4_DATA",
+                        "RunH": "Summer16_23Sep2016HV4_DATA",
+                    },
+                    #jer_tag="Summer16_25nsV1_MC",
+                    jer_tag=None,
+                    jmr_vals=[1.0, 1.2, 0.8],
+                    do_factorized_jec=True),
+            },
+            "2017": {
+                "Fall17_17Nov2017_V6":
+                    JetMetCorrections(
+                    jec_tag="Fall17_17Nov2017_V6_MC",
+                    jec_tag_data={
+                        "RunB": "Fall17_17Nov2017B_V6_DATA",
+                        "RunC": "Fall17_17Nov2017C_V6_DATA",
+                        "RunD": "Fall17_17Nov2017D_V6_DATA",
+                        "RunE": "Fall17_17Nov2017E_V6_DATA",
+                        "RunF": "Fall17_17Nov2017F_V6_DATA",
+                    },
+                    #jer_tag="Fall17_V3_MC",
+                    jer_tag=None,
+                    jmr_vals=[1.09, 1.14, 1.04],
+                    do_factorized_jec=True),
+            },
+            "2018": {
+                "Autumn18_V8":
+                    JetMetCorrections(
+                    jec_tag="Autumn18_V8_MC",
+                    jec_tag_data={
+                        "RunA": "Autumn18_RunA_V8_DATA",
+                        "RunB": "Autumn18_RunB_V8_DATA",
+                        "RunC": "Autumn18_RunC_V8_DATA",
+                        "RunD": "Autumn18_RunD_V8_DATA",
+                    },
+                    #jer_tag="Fall17_V3_MC",
+                    jer_tag=None,
+                    jmr_vals=[1.0, 1.2, 0.8],
+                    do_factorized_jec=True),
+                "Autumn18_V16":
+                    JetMetCorrections(
+                    jec_tag="Autumn18_V16_MC",
+                    jec_tag_data={
+                        "RunA": "Autumn18_RunA_V16_DATA",
+                        "RunB": "Autumn18_RunB_V16_DATA",
+                        "RunC": "Autumn18_RunC_V16_DATA",
+                        "RunD": "Autumn18_RunD_V16_DATA",
+                    },
+                    #jer_tag="Fall17_V3_MC",
+                    jer_tag=None,
+                    jmr_vals=[1.0, 1.2, 0.8],
+                    do_factorized_jec=True),
+            }
+        }
+
+        self.dnn_model = None
+        self.dnn_normfactors = None
+        if do_tensorflow:
+            print("Loading tensorflow model")
+            #disable GPU for tensorflow
+            if not args.use_cuda: 
+                os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+                from keras.backend.tensorflow_backend import set_session
+                import tensorflow as tf
+                config = tf.ConfigProto()
+                config.intra_op_parallelism_threads=args.nthreads
+                config.inter_op_parallelism_threads=args.nthreads
+                set_session(tf.Session(config=config))
+            else:
+                from keras.backend.tensorflow_backend import set_session
+                import tensorflow as tf
+                config = tf.ConfigProto()
+                config.gpu_options.allow_growth = False
+                config.gpu_options.per_process_gpu_memory_fraction = 0.2
+                config.intra_op_parallelism_threads=args.nthreads
+                config.inter_op_parallelism_threads=args.nthreads
+                set_session(tf.Session(config=config))
+            
+            #load DNN model
+            import keras
+            dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.h5")
+            dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
+
+            if args.use_cuda:
+                dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
+
 if __name__ == "__main__":
 
     # Do you want to use yappi to profile the python code
     do_prof = False
-    do_tensorflow = True
+    do_tensorflow = False
+    do_jec = False
 
     args = parse_args()
 
@@ -293,52 +485,7 @@ if __name__ == "__main__":
 
     hmumu_utils.NUMPY_LIB, hmumu_utils.ha = choose_backend(args.use_cuda)
     Dataset.numpy_lib = hmumu_utils.NUMPY_LIB
-    DecisionTreeNode.NUMPY_LIB = hmumu_utils.NUMPY_LIB
     
-    #Categorization where we first cut on leptons, then jets
-    dt = DecisionTreeNode("additional_leptons", 0)
-    dt.add_child_left(DecisionTreeNode("num_jets", 0))
-    dt.add_child_right(DecisionTreeLeaf())
-    dt.child_left.add_child_left(DecisionTreeLeaf())
-    dt.child_left.add_child_right(DecisionTreeNode("dijet_inv_mass", 400))
-    dt.child_left.child_right.add_child_left(DecisionTreeLeaf())
-    dt.child_left.child_right.add_child_right(DecisionTreeNode("num_jets_btag", 0))
-    dt.child_left.child_right.child_right.add_child_left(DecisionTreeLeaf())
-    dt.child_left.child_right.child_right.add_child_right(DecisionTreeLeaf())
-    dt.assign_ids()
-    varA = dt
-
-    # not used
-    # dt2 = DecisionTreeNode("num_jets_btag", 0)
-    # dt2.add_child_left(DecisionTreeNode("additional_leptons", 0))
-    # dt2.child_left.add_child_left(DecisionTreeNode("dijet_inv_mass", 400))
-    # dt2.child_left.child_left.add_child_right(DecisionTreeLeaf())
-    # dt2.child_left.child_left.add_child_left(DecisionTreeNode("dijet_inv_mass", 60))
-    # dt2.child_left.child_left.child_left.add_child_left(DecisionTreeLeaf())
-    # dt2.child_left.child_left.child_left.add_child_right(DecisionTreeNode("dijet_inv_mass", 110))
-    # dt2.child_left.child_left.child_left.child_right.add_child_left(DecisionTreeLeaf())
-    # dt2.child_left.child_left.child_left.child_right.add_child_right(DecisionTreeLeaf())
-    # dt2.child_left.add_child_right(DecisionTreeNode("additional_leptons", 1))
-    # dt2.child_left.child_right.add_child_left(DecisionTreeLeaf())
-    # dt2.child_left.child_right.add_child_right(DecisionTreeLeaf())
-    # dt2.add_child_right(DecisionTreeNode("additional_leptons", 0))
-    # dt2.child_right.add_child_right(DecisionTreeLeaf())
-    # dt2.child_right.add_child_left(DecisionTreeNode("num_jets", 4))
-    # dt2.child_right.child_left.add_child_right(DecisionTreeLeaf())
-    # dt2.child_right.child_left.add_child_left(DecisionTreeLeaf())
-    # dt2.assign_ids()
-    # varB = dt2
-
-    # make a hundred random trees as a starting point
-    # varlist = {
-    #     "dijet_inv_mass": [50, 100, 150, 200, 250, 300, 350, 400, 500, 600],
-    #     "num_jets": [0, 1, 2, 3, 4, 5],
-    #     "num_jets_btag": [0, 1, 2],
-    #     "leading_mu_abs_eta": [0.5, 1.0, 1.5, 2.0],
-    #     "additional_leptons": [0,1,3,4]
-    # }
-    # rand_trees = {"rand{0}".format(i): make_random_tree(varlist, 5) for i in range(1)}
-
     # All analysis definitions (cut values etc) should go here
     analysis_parameters = {
         "baseline": {
@@ -441,159 +588,14 @@ if __name__ == "__main__":
     #analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
     #analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
 
-    lumimask = {
-        "2016": LumiMask("data/Cert_271036-284044_13TeV_23Sep2016ReReco_Collisions16_JSON.txt", np, backend_cpu),
-        "2017": LumiMask("data/Cert_294927-306462_13TeV_EOY2017ReReco_Collisions17_JSON.txt", np, backend_cpu),
-        "2018": LumiMask("data/Cert_314472-325175_13TeV_17SeptEarlyReReco2018ABC_PromptEraD_Collisions18_JSON.txt", np, backend_cpu),
-    }
-
-    lumidata = {
-        "2016": LumiData("data/lumi2016.csv"),
-        "2017": LumiData("data/lumi2017.csv"),
-        "2018": LumiData("data/lumi2018.csv")
-    }
-
-    pu_corrections = {
-        "2016": load_puhist_target("data/pileup/RunII_2016_data.root"),
-        "2017": load_puhist_target("data/pileup/RunII_2017_data.root"),
-        "2018": load_puhist_target("data/pileup/RunII_2018_data.root")
-    }
-    
-    libhmm = LibHMuMu()
-    #https://twiki.cern.ch/twiki/bin/viewauth/CMS/RochcorMuon
-    rochester_corr = {
-        "2016": RochesterCorrections(libhmm, "data/RoccoR2016.txt"),
-        "2017": RochesterCorrections(libhmm, "data/RoccoR2017v1.txt"),
-        "2018": RochesterCorrections(libhmm, "data/RoccoR2018.txt")
-    }
-
-    ratios_dataera = {
-        "2016": [0.5548, 1.0 - 0.5548],
-        "2017": 1.0,
-        "2018": 1.0
-    }
-
-    lepsf_iso = {
-        "2016": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2016/RunBCDEF_SF_ISO.root", "data/leptonSF/2016/RunGH_SF_ISO.root"],
-            ["NUM_LooseRelIso_DEN_MediumID_eta_pt", "NUM_LooseRelIso_DEN_MediumID_eta_pt"],
-            ratios_dataera["2016"]),
-        "2017": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2017/RunBCDEF_SF_ISO_syst.root"],
-            ["NUM_LooseRelIso_DEN_MediumID_pt_abseta"], [1.0]),
-        "2018": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2018/RunABCD_SF_ISO.root"],
-            ["NUM_LooseRelIso_DEN_MediumID_pt_abseta"], [1.0]),
-    }
-    lepsf_id = {
-        "2016": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2016/RunBCDEF_SF_ID.root", "data/leptonSF/2016/RunGH_SF_ID.root"],
-            ["NUM_MediumID_DEN_genTracks_eta_pt", "NUM_MediumID_DEN_genTracks_eta_pt"],
-            ratios_dataera["2016"]),
-        "2017": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2017/RunBCDEF_SF_ID_syst.root"],
-            ["NUM_MediumID_DEN_genTracks_pt_abseta"], [1.0]),
-        "2018": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2018/RunABCD_SF_ID.root"],
-            ["NUM_MediumID_DEN_TrackerMuons_pt_abseta"], [1.0])
-    }
-    lepsf_trig = {
-        "2016": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2016/EfficienciesAndSF_RunBtoF.root", "data/leptonSF/2016/EfficienciesAndSF_RunGtoH.root"],
-            ["IsoMu24_OR_IsoTkMu24_PtEtaBins/abseta_pt_ratio", "IsoMu24_OR_IsoTkMu24_PtEtaBins/abseta_pt_ratio"],
-            ratios_dataera["2016"]),
-        "2017": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2017/EfficienciesAndSF_RunBtoF_Nov17Nov2017.root"],
-            ["IsoMu27_PtEtaBins/pt_abseta_ratio"],
-            [1.0]
-        ),
-        "2018": LeptonEfficiencyCorrections(libhmm,
-            ["data/leptonSF/2018/EfficienciesAndSF_2018Data_AfterMuonHLTUpdate.root"],
-            ["IsoMu24_PtEtaBins/pt_abseta_ratio"],
-            [1.0]
-        ),
-    }
-
-    #JEC files copied from
-    #https://github.com/cms-jet/JECDatabase/tree/master/textFiles
-    #Need to rename JECDatabase files as follows:
-    #  *_UncertaintySources_AK4PFchs.txt -> *_UncertaintySources_AK4PFchs.junc.txt
-    #  *_Uncertainty_AK4PFchs.txt -> *_Uncertainty_AK4PFchs.junc.txt
-    #JER files from
-    #  *_PtResolution_AK4PFchs.txt -> *_PtResolution_AK4PFchs.jr.txt
-    #  *_SF_AK4PFchs.txt -> *_SF_AK4PFchs.jersf.txt
-    jetmet_corrections = {
-        "2016": {
-            "Summer16_23Sep2016V4":
-                JetMetCorrections(
-                jec_tag="Summer16_23Sep2016V4_MC",
-                jec_tag_data={
-                    "RunB": "Summer16_23Sep2016BCDV4_DATA",
-                    "RunC": "Summer16_23Sep2016BCDV4_DATA",
-                    "RunD": "Summer16_23Sep2016BCDV4_DATA",
-                    "RunE": "Summer16_23Sep2016EFV4_DATA",
-                    "RunF": "Summer16_23Sep2016EFV4_DATA",
-                    "RunG": "Summer16_23Sep2016GV4_DATA",
-                    "RunH": "Summer16_23Sep2016HV4_DATA",
-                },
-                #jer_tag="Summer16_25nsV1_MC",
-                jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8],
-                do_factorized_jec=True),
-        },
-        "2017": {
-            "Fall17_17Nov2017_V6":
-                JetMetCorrections(
-                jec_tag="Fall17_17Nov2017_V6_MC",
-                jec_tag_data={
-                    "RunB": "Fall17_17Nov2017B_V6_DATA",
-                    "RunC": "Fall17_17Nov2017C_V6_DATA",
-                    "RunD": "Fall17_17Nov2017D_V6_DATA",
-                    "RunE": "Fall17_17Nov2017E_V6_DATA",
-                    "RunF": "Fall17_17Nov2017F_V6_DATA",
-                },
-                #jer_tag="Fall17_V3_MC",
-                jer_tag=None,
-                jmr_vals=[1.09, 1.14, 1.04],
-                do_factorized_jec=True),
-        },
-        "2018": {
-            "Autumn18_V8":
-                JetMetCorrections(
-                jec_tag="Autumn18_V8_MC",
-                jec_tag_data={
-                    "RunA": "Autumn18_RunA_V8_DATA",
-                    "RunB": "Autumn18_RunB_V8_DATA",
-                    "RunC": "Autumn18_RunC_V8_DATA",
-                    "RunD": "Autumn18_RunD_V8_DATA",
-                },
-                #jer_tag="Fall17_V3_MC",
-                jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8],
-                do_factorized_jec=True),
-            "Autumn18_V16":
-                JetMetCorrections(
-                jec_tag="Autumn18_V16_MC",
-                jec_tag_data={
-                    "RunA": "Autumn18_RunA_V16_DATA",
-                    "RunB": "Autumn18_RunB_V16_DATA",
-                    "RunC": "Autumn18_RunC_V16_DATA",
-                    "RunD": "Autumn18_RunD_V16_DATA",
-                },
-                #jer_tag="Fall17_V3_MC",
-                jer_tag=None,
-                jmr_vals=[1.0, 1.2, 0.8],
-                do_factorized_jec=True),
-        }
-    }
     #Run baseline analysis
-    outpath = "{0}/baseline".format(args.out)
+    outpath = "{0}/partial_results".format(args.out)
     try:
         os.makedirs(outpath)
     except FileExistsError as e:
             pass
 
-    with open('{0}/parameters.pickle'.format(outpath), 'wb') as handle:
+    with open('{0}/parameters.pkl'.format(outpath), 'wb') as handle:
         pickle.dump(analysis_parameters, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     if do_prof:
@@ -602,54 +604,78 @@ if __name__ == "__main__":
         yappi.set_clock_type('cpu')
         yappi.start(builtins=True)
 
-    dnn_model = None
-    dnn_normfactors = None
-    if do_tensorflow:
-        #disable GPU for tensorflow
-        if not args.use_cuda: 
-            os.environ["CUDA_VISIBLE_DEVICES"]="-1"
-            from keras.backend.tensorflow_backend import set_session
-            import tensorflow as tf
-            config = tf.ConfigProto()
-            config.intra_op_parallelism_threads=args.nthreads
-            config.inter_op_parallelism_threads=args.nthreads
-            set_session(tf.Session(config=config))
-        else:
-            from keras.backend.tensorflow_backend import set_session
-            import tensorflow as tf
-            config = tf.ConfigProto()
-            config.gpu_options.allow_growth = False
-            config.gpu_options.per_process_gpu_memory_fraction = 0.2
-            config.intra_op_parallelism_threads=args.nthreads
-            config.inter_op_parallelism_threads=args.nthreads
-            set_session(tf.Session(config=config))
-        
-        #load DNN model
-        import keras
-        dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.h5")
-        dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
+    #Recreate dump of all filenames
+    if "cache" in args.action:
+        filenames_cache = {}
+        for dataset in datasets:
+            dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
+            filenames_all = glob.glob(args.datapath + dataset_globpattern, recursive=True)
+            filenames_all = [fn for fn in filenames_all if not "Friend" in fn]
+            filenames_cache[dataset_name + "_" + dataset_era] = [
+            fn.replace(args.datapath, "") for fn in filenames_all]
+    
+        #save all dataset filenames to a json file 
+        print("Creating a json dump of all the dataset filenames")
+        with open(args.cache_location + "/datasets.json", "w") as fi:
+            fi.write(json.dumps(filenames_cache, indent=2))
 
-        if args.use_cuda:
-            dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
+    #Create a list of job files for processing
+    if "jobfiles" in args.action:
+        print("Creating jobfiles and datasets.json file")
+        filenames_cache = json.load(open(args.cache_location + "/datasets.json", "r"))
+        for dataset in datasets:
+            dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
+            filenames_all = filenames_cache[dataset_name + "_" + dataset_era]
+            filenames_all_full = [args.datapath + "/" + fn for fn in filenames_all]
+            create_dataset_jobfiles(dataset_name, dataset_era,
+                filenames_all_full, is_mc, args.chunksize, args.out)
 
-    run_analysis(args, outpath, datasets, analysis_parameters,
-        {k: args.chunksize*v for k, v in chunksizes_mult.items()},
-        {k: args.maxfiles*v for k, v in maxfiles_mult.items()},
-        lumidata, lumimask, pu_corrections, rochester_corr,
-        lepsf_iso, lepsf_id, lepsf_trig, dnn_model, dnn_normfactors,
-        jetmet_corrections)
+    #For each dataset, load the job files
+    if "cache" in args.action or "analyze" in args.action:
+        if args.jobfiles is None:
+            args.jobfiles = []
+            for dataset in datasets:
+                dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
+                jobfiles_dataset = glob.glob(args.out + "/jobfiles/{0}_{1}_*.json".format(dataset_name, dataset_era))
+                assert(len(jobfiles_dataset) > 0)
+                if args.maxfiles > 0:
+                    jobfiles_dataset = jobfiles_dataset[:args.maxfiles]
+                args.jobfiles += jobfiles_dataset
+        assert(len(args.jobfiles) > 0)
+        job_descriptions = []
+        for f in args.jobfiles:
+            job_descriptions += [json.load(open(f))]
+        print("Will process {0} job descriptions".format(len(job_descriptions)))
+        assert(len(job_descriptions) > 0)
 
-    # if "analyze" in args.action: 
-    #     ans = analysis_parameters["baseline"]["categorization_trees"].keys()
-    #     r = load_analysis(mc_samples, outpath, cross_sections, ans)
-    #     Zs = compute_significances(sig_samples, bkg_samples, r, ans)
-    #     print(Zs[:10])
-    #     with open('{0}/sigs.pickle'.format(outpath), 'wb') as handle:
-    #         pickle.dump(Zs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    if "cache" in args.action:
+        print("Running the 'cache' step of the analysis, ROOT files will be opened and branches will be uncompressed")
+        print("Will retrieve dataset filenames based on existing ROOT files on filesystem in datapath={0}".format(args.datapath)) 
+       
+        try:
+            os.makedirs(cmdline_args.cache_location)
+        except Exception as e:
+            pass
 
-    #     #best_tree = copy.deepcopy(analysis_parameters["baseline"]["categorization_trees"][Zs[0][0]])
-    #     starting_tree = copy.deepcopy(rand_trees["rand0"])
-    #     optimize_categories(sig_samples, bkg_samples, varlist, datasets, lumidata, lumimask, pu_corrections, cross_sections, args, analysis_parameters, starting_tree)
+        run_cache(args, outpath, job_descriptions, analysis_parameters)
+    
+    if "analyze" in args.action:
+        analysis_corrections = AnalysisCorrections(args, do_tensorflow)
+        run_analysis(args, outpath, job_descriptions, analysis_parameters, analysis_corrections)
+
+    if "merge" in args.action:
+        for dataset in datasets:
+            dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
+            results = []
+            for res_file in glob.glob(outpath + "/{0}_{1}_*.pkl".format(dataset_name, dataset_era)):
+                res = pickle.load(open(res_file, "rb"))
+                results += [res]
+            results = sum(results, Results({}))
+            try:
+                os.makedirs(args.out + "/results")
+            except FileExistsError as e:
+                pass
+            results.save_json(args.out + "/results/{0}_{1}.json".format(dataset_name, dataset_era))
 
     if do_prof:
         stats = yappi.get_func_stats()

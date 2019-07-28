@@ -545,7 +545,7 @@ if __name__ == "__main__":
         weight_xs = {}
         datacard_args = []
         
-        analysis = "baseline"
+        analysis = "results"
         input_folder = cmdline_args.input
         dd = "{0}/{1}".format(input_folder, analysis) 
         res["data"] = json.load(open(dd + "/data_{0}.json".format(era)))
