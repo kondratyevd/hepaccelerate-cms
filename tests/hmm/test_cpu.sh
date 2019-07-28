@@ -44,7 +44,7 @@ function run_code_merge() {
     singularity exec --nv -B /storage -B /nvme1 $SINGULARITY_IMAGE python3 \
         tests/hmm/analysis_hmumu.py --maxfiles 1 --chunksize 5 --action merge \
         --cache-location $CACHE_LOCATION --datapath /storage/user/jpata/ \
-        --nthreads $NTHREADS --out /storage/user/jpata/hmm/out
+        --nthreads $NTHREADS --out /storage/user/jpata/hmm/out2
 }
 
 run_code_merge

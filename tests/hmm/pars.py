@@ -96,7 +96,20 @@ cross_sections = {
 }
 
 signal_samples = ["ggh", "vbf"]
-shape_systematics = ["jes", "jer", "puWeight"]
+jec_unc = ['AbsoluteFlavMap', 'AbsoluteMPFBias', 'AbsoluteSample', 'AbsoluteScale',
+    'AbsoluteStat', 'CorrelationGroupFlavor', 'CorrelationGroupIntercalibration',
+    'CorrelationGroupMPFInSitu', 'CorrelationGroupUncorrelated', 'CorrelationGroupbJES',
+    'FlavorPhotonJet', 'FlavorPureBottom', 'FlavorPureCharm', 'FlavorPureGluon',
+    'FlavorPureQuark', 'FlavorQCD', 'FlavorZJet', 'Fragmentation', 'PileUpDataMC',
+    'PileUpEnvelope', 'PileUpMuZero', 'PileUpPtBB', 'PileUpPtEC1', 'PileUpPtEC2',
+    'PileUpPtHF', 'PileUpPtRef', 'RelativeBal', 'RelativeFSR', 'RelativeJEREC1',
+    'RelativeJEREC2', 'RelativeJERHF', 'RelativePtBB', 'RelativePtEC1', 'RelativePtEC2',
+    'RelativePtHF', 'RelativeSample', 'RelativeStatEC', 'RelativeStatFSR', 'RelativeStatHF',
+    'SinglePionECAL', 'SinglePionHCAL', 'SubTotalAbsolute', 'SubTotalMC', 'SubTotalPileUp',
+    'SubTotalPt', 'SubTotalRelative', 'SubTotalScale', 'TimePtEta', 'Total', 'TotalNoFlavor',
+    'TotalNoFlavorNoTime', 'TotalNoTime'] 
+uncertainties = jec_unc + ["puWeight"]
+shape_systematics = jec_unc + ["jer", "puWeight"]
 common_scale_uncertainties = {
     "lumi": 1.025,
 }

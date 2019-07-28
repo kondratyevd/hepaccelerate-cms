@@ -10,7 +10,7 @@ import matplotlib
 import copy
 import multiprocessing
 
-from pars import catnames, varnames, analysis_names
+from pars import catnames, varnames, analysis_names, shape_systematics
 from scipy.stats import wasserstein_distance
 
 import argparse
@@ -113,8 +113,7 @@ def make_pdf_plot(args):
     hist_template = copy.deepcopy(hd)
     hist_template.contents[:] = 0
     hist_template.contents_w2[:] = 0
-    
-    uncertainties = ["jes", "puWeight"]
+   
     
     hmc = []
     
@@ -130,7 +129,7 @@ def make_pdf_plot(args):
     hdelta_quadrature = np.zeros_like(hist_template.contents)
     
     for sdir in ["__up", "__down"]:
-        for unc in uncertainties:
+        for unc in shape_systematics:
             if (unc + sdir) in res[mc_samp][analysis][var]:
                 htot_variated[unc + sdir] = sum([
                     res[mc_samp][analysis][var][unc + sdir]* weight_xs[mc_samp] for mc_samp in mc_samples
@@ -225,7 +224,7 @@ def mask_inv_mass(hist):
 def create_variated_histos(
     hdict,
     baseline="nominal",
-    variations=["puWeight", "jes", "jer"]):
+    variations=shape_systematics):
  
     if not baseline in hdict.keys():
         import pdb;pdb.set_trace()
