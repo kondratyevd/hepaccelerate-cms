@@ -641,8 +641,8 @@ def run_analysis(
         input_thread = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
         input_thread.start()
 
-    # metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
-    # metrics_thread.start()
+    #metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+    #metrics_thread.start()
 
     rets = []
     num_processed = 0
@@ -1638,7 +1638,7 @@ class JetTransformer:
         if variation_name in self.jet_uncertainty_names:
             startfrom = "pt_jec"
             corrs_up_down = self.apply_jec_unc(startfrom, variation_name)
-            ptvec = getattr(self, startfrom) * (1.0 - self.jets.rawFactor)
+            ptvec = getattr(self, startfrom)
             return {
                 (variation_name, "up"): ptvec*corrs_up_down[:, 0],
                 (variation_name, "down"): ptvec*corrs_up_down[:, 1]
@@ -2050,8 +2050,8 @@ class InputGen:
             return None
 
         job_desc = self.job_descriptions[self.num_chunk]
-        print("Loading dataset {0} job desc {1}, {2}".format(
-            job_desc["dataset_name"], self.num_chunk, job_desc["filenames"]))
+        print("Loading dataset {0} job desc {1}/{2}, {3}".format(
+            job_desc["dataset_name"], self.num_chunk, len(self.job_descriptions), job_desc["filenames"]))
 
         datastructures = create_datastructure(job_desc["is_mc"], job_desc["dataset_era"])
 

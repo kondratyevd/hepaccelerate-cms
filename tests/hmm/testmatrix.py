@@ -5,7 +5,6 @@ from analysis_hmumu import datasets, parse_args, main
 def setup_baseargs():
     args = parse_args()
 
-    args.datapath = "./localdata"
     args.cache_location = "./mycache"
     args.chunksize = 1
     args.maxchunks = 4

@@ -524,6 +524,7 @@ def main(args, datasets):
 
     #For each dataset, find out which chunks we want to process
     if "cache" in args.action or "analyze" in args.action:
+        jobfile_data = []
         if args.jobfiles is None:
             print("You did not specify to process specific dataset chunks, assuming you want to process all chunks")
             print("If this is not true, please specify e.g. --jobfiles data_2018_0.json data_2018_1.json ...")
@@ -535,12 +536,14 @@ def main(args, datasets):
                 if args.maxchunks > 0:
                     jobfiles_dataset = jobfiles_dataset[:args.maxchunks]
                 args.jobfiles += jobfiles_dataset
-        else:
-            assert(len(args.jobfiles) > 0)
-            print("You specified --jobfiles {0}, processing only these dataset chunks".format(" ".join(args.jobfiles))) 
-            jobfile_data = []
-            for f in args.jobfiles:
-                jobfile_data += [json.load(open(f))]
+       
+        #Now load the jobfiles 
+        assert(len(args.jobfiles) > 0)
+        print("You specified --jobfiles {0}, processing only these dataset chunks".format(" ".join(args.jobfiles))) 
+        jobfile_data = []
+        for f in args.jobfiles:
+            jobfile_data += [json.load(open(f))]
+
         chunkstr = " ".join(["{0}_{1}_{2}".format(
             ch["dataset_name"], ch["dataset_era"], ch["dataset_num_chunk"])
             for ch in jobfile_data])

@@ -18,7 +18,7 @@ export KERAS_BACKEND=tensorflow
 export CACHE_PATH=/storage/user/$USER/hmm/cache
 export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
-export OUTDIR=out2
+export OUTDIR=out
 
 cd /data/jpata/hmumu/hepaccelerate-cms/
 
@@ -27,7 +27,6 @@ python3 tests/hmm/analysis_hmumu.py \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
     --datapath /storage/user/jpata/ \
     --out $workdir/$OUTDIR \
-    --do-factorized-jec \
     --jobfile $workdir/jobfiles/$JOBFILE.json
 
 
