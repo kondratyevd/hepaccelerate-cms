@@ -261,7 +261,7 @@ def analyze_data(
 
     jets_passing_id = jets.select_objects(selected_jets_id)
     
-    print("doing nominal jec on {0} jets".format(jets_passing_id.numobjects()))
+    print("Doing nominal jec on {0} jets".format(jets_passing_id.numobjects()))
     jet_systematics = JetTransformer(
         jets_passing_id, scalars,
         parameters,
@@ -569,7 +569,7 @@ def run_cache(
     job_descriptions,
     parameters):
 
-    print("run_cache", len(job_descriptions))
+    print("run_cache with job_descriptions=", len(job_descriptions))
     nev_total = 0
     nev_loaded = 0
     t0 = time.time()
@@ -598,8 +598,8 @@ def run_cache(
 
     t1 = time.time()
     dt = t1 - t0
-    print("Overall processed {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
-        nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
+    print("In run_cache, processed {nev:.2E} events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
+        nev=nev_total, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
     )
 
     bench_ret = {}
@@ -712,7 +712,7 @@ def run_analysis(
     
     t1 = time.time()
     dt = t1 - t0
-    print("Overall processed {nev:.2E} ({nev_loaded:.2E} loaded) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
+    print("In run_analysis, processed {nev_loaded:.2E} ({nev:.2E} raw NanoAOD equivalent) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
         nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
     )
 
@@ -1638,7 +1638,7 @@ class JetTransformer:
         if variation_name in self.jet_uncertainty_names:
             startfrom = "pt_jec"
             corrs_up_down = self.apply_jec_unc(startfrom, variation_name)
-            ptvec = getattr(self, startfrom)
+            ptvec = getattr(self, startfrom) * (1.0 - self.jets.rawFactor)
             return {
                 (variation_name, "up"): ptvec*corrs_up_down[:, 0],
                 (variation_name, "down"): ptvec*corrs_up_down[:, 1]
@@ -2096,6 +2096,7 @@ def create_dataset_jobfiles(
     except Exception as e:
         pass
 
+    job_descriptions = []
     ijob = 0
     for files_chunk in chunks(filenames, chunksize):
         job_description = {
@@ -2105,10 +2106,12 @@ def create_dataset_jobfiles(
             "is_mc": is_mc,
             "dataset_num_chunk": ijob,
         }
+        job_descriptions += [job_description]
         with open(outpath + "/jobfiles/{0}_{1}_{2}.json".format(dataset_name, dataset_era, ijob), "w") as fi:
             fi.write(json.dumps(job_description, indent=2))
 
         ijob += 1
+    return job_descriptions
 
 
 ###

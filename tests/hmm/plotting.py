@@ -15,10 +15,13 @@ from scipy.stats import wasserstein_distance
 
 import argparse
 import pickle
+import glob
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis plotting')
     parser.add_argument('--input', action='store', type=str, help='Input directory from the previous step')
+    parser.add_argument('--keep-processes', action='append', help='Keep only certain processes, defaults to all', default=None)
+    parser.add_argument('--histnames', action='append', help='Process only these histograms, defaults to all', default=None)
     args = parser.parse_args()
     return args
 
@@ -257,6 +260,7 @@ def create_datacard(dict_procs, parameter_name, all_processes, histname, baselin
 
     hists_mc = []
  
+    print("create_datacard processes=", all_processes)
     for proc in all_processes:
         print("create_datacard", proc)
         rr = dict_procs[proc][parameter_name][histname]
@@ -270,7 +274,7 @@ def create_datacard(dict_procs, parameter_name, all_processes, histname, baselin
 
         for syst_name, histo in variated_histos.items():
             if proc != "data":
-                histo = histo * weight_xs[proc]       
+                histo = histo * weight_xs[proc]
 
             if syst_name == "nominal":
 
@@ -288,6 +292,7 @@ def create_datacard(dict_procs, parameter_name, all_processes, histname, baselin
             
             ret[hist_name] = copy.deepcopy(histo)
 
+    assert(len(hists_mc) > 0)
     hist_mc_tot = copy.deepcopy(hists_mc[0])
     for h in hists_mc[:1]:
         hist_mc_tot += h
@@ -313,7 +318,9 @@ def create_datacard_combine(
     txtfile_name
     ):
     
-    dc, event_counts = create_datacard(dict_procs, parameter_name, all_processes, histname, baseline, variations, weight_xs)
+    dc, event_counts = create_datacard(
+        dict_procs, parameter_name, all_processes,
+        histname, baseline, variations, weight_xs)
     rootfile_name = txtfile_name.replace(".txt", ".root")
     
     save_datacard(dc, rootfile_name)
@@ -529,17 +536,23 @@ if __name__ == "__main__":
     from pars import cross_sections, categories
     from pars import signal_samples, shape_systematics, common_scale_uncertainties, scale_uncertainties
 
-    import json
-
-    #create a list of all the processes that need to be loaded from the json files
+    #create a list of all the processes that need to be loaded from the result files
     mc_samples_load = set()
     for catname, category_dict in categories.items():
         for process in category_dict["datacard_processes"]:
             mc_samples_load.add(process)
     mc_samples_load = list(mc_samples_load)
 
-    for era in ["2016", "2017", "2018"]:
-    #for era in ["2018"]:
+    eras = []
+    data_results = glob.glob(cmdline_args.input + "/results/data_*.pkl")
+    for dr in data_results:
+        dr_filename = os.path.basename(dr)
+        dr_filename_noext = dr_filename.split(".")[0]
+        name, era = dr_filename_noext.split("_")
+        eras += [era]
+    print("Will make datacards and control plots for eras {0}".format(eras))
+
+    for era in eras:
         res = {}
         genweights = {}
         weight_xs = {}
@@ -550,10 +563,11 @@ if __name__ == "__main__":
         dd = "{0}/{1}".format(input_folder, analysis) 
         res["data"] = pickle.load(open(dd + "/data_{0}.pkl".format(era), "rb"))
         for mc_samp in mc_samples_load:
+            res_file_name = dd + "/{0}_{1}.pkl".format(mc_samp, era)
             try:
-                res[mc_samp] = pickle.load(open(dd + "/{0}_{1}.pkl".format(mc_samp, era), "rb"))
+                res[mc_samp] = pickle.load(open(res_file_name, "rb"))
             except Exception as e:
-                print("Skipping {0}".format(mc_samp))
+                print("Could not find results file {0}, skipping process {1}".format(res_file_name, mc_samp))
 
         analyses = [k for k in res["data"].keys() if not k in ["cache_metadata", "num_events"]]
 
@@ -577,11 +591,18 @@ if __name__ == "__main__":
                     genweights[mc_samp] = res[mc_samp]["genEventSumw"]
                     weight_xs[mc_samp] = cross_sections[mc_samp] * int_lumi / genweights[mc_samp]
             
-            histnames = [h for h in res["data"]["baseline"].keys() if h.startswith("hist__")]
-            #histnames = ["hist__dimuon__leading_muon_pt"]
+            histnames = []
+            if cmdline_args.histnames is None:
+                histnames = [h for h in res["data"]["baseline"].keys() if h.startswith("hist__")]
+                print("Will create datacards and plots for all histograms")
+                print("Use commandline option --histnames hist__dimuon__leading_muon_pt --histnames hist__dimuon__subleading_muon_pt ... to change that")
+            else:
+                histnames = cmdline_args.histnames
+            print("Processing histnames", histnames)
             
             for var in histnames:
                 if var in ["hist_puweight", "hist__dijet_inv_mass_gen", "hist__dnn_presel__dnn_pred"]:
+                    print("Skipping {0}".format(var))
                     continue
 
                 if ("h_peak" in var):
@@ -592,6 +613,24 @@ if __name__ == "__main__":
                     mc_samples = categories["z_peak"]["datacard_processes"]
                 else:
                     mc_samples = categories["dimuon"]["datacard_processes"]
+
+
+                #If we specified to only use certain processes in the datacard, keep only those
+                if cmdline_args.keep_processes is None:
+                    pass
+                else:
+                    mc_samples_new = []
+                    for proc in mc_samples:
+                        print(proc)
+                        if proc in cmdline_args.keep_processes:
+                            mc_samples_new += [proc]
+                    mc_samples = mc_samples_new
+                if len(mc_samples) == 0:
+                    raise Exception(
+                        "Could not match any MC process to histogram {0}, ".format(var) + 
+                        "please check the definition in pars.py -> categories as "
+                        "well as --keep-processes commandline option."
+                        )
 
                 create_datacard_combine(
                     res,
