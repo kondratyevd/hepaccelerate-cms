@@ -14,7 +14,7 @@ for word in "$@"; do
 done
 
 export JOBFILE=$1
-export NTHREADS=2
+export NTHREADS=4
 export PYTHONPATH=coffea:hepaccelerate:. 
 export HEPACCELERATE_CUDA=0
 export KERAS_BACKEND=tensorflow
@@ -31,9 +31,14 @@ python3 tests/hmm/analysis_hmumu.py \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
     --datapath /storage/user/jpata/ \
     --out $workdir/$OUTDIR \
+    --do-factorized-jec \
     --jobfiles-load $workdir/args.txt
 
 
-cp -R $workdir/$OUTDIR /storage/user/$USER/hmm/
-ls $CACHE_PATH
+cd $workdir
+
+tar -cvzf out.tgz $OUTDIR
+cp out.tgz /storage/user/$USER/hmm/out_$CONDORJOBID.tgz
+du /storage/user/$USER/hmm/out_$CONDORJOBID.tgz
+
 echo "job done"
