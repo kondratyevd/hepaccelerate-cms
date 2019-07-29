@@ -3,10 +3,10 @@
 set -e
 
 #Set NTHREADS=24 to run on whole machine, =1 for debugging
-NTHREADS=4
+export NTHREADS=4
 
 #Set to -1 to run on all files, 1 for debugging/testing
-MAXCHUNKS=1
+export MAXCHUNKS=1
 
 #This is where the intermediate analysis files will be saved and loaded from
 #As long as one person produces it, other people can run the analysis on this
@@ -21,10 +21,13 @@ export OMP_NUM_THREADS=$NTHREADS
 export HEPACCELERATE_CUDA=0
 export KERAS_BACKEND=tensorflow
 
+#This is the location of the input NanoAOD and generally does not need to be changed
+export INPUTDATAPATH=/storage/user/jpata/
+
 ## Step 1: cache ROOT data (need to repeat only when list of files or branches changes)
 ## This can take a few hours currently for the whole run (using MAXFILES=-1 and NTHREADS=24)
 singularity exec --nv -B /storage $SINGULARITY_IMAGE python3 tests/hmm/analysis_hmumu.py \
-    --action analyze --maxchunks $MAXCHUNKS \
+    --action analyze --action merge --maxchunks $MAXCHUNKS \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
-    --outpath ./out \
-    --datapath /storage/user/jpata/ --era 2016 --era 2017 --era 2018
+    --out ./out \
+    --datapath $INPUTDATAPATH --era 2016 --era 2017 --era 2018

@@ -39,6 +39,7 @@ singularity exec /storage/user/jpata/cupy2.simg make -j4
 cd ../..
 
 #Run the code as a small test (small dataset by default, edit the file to change this)
+#This should take approximately 5 minutes and processes 1 file from each dataset for each year
 ./tests/hmm/run.sh
 ~~~
 

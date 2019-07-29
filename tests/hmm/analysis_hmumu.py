@@ -466,9 +466,9 @@ def main(args, datasets):
             "categorization_trees": {}
         },
     }
-    #analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
-    #analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
-    #analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
+    analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
+    analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
 
     #Run baseline analysis
     outpath = "{0}/partial_results".format(args.out)
