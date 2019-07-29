@@ -39,6 +39,7 @@ NUMPY_LIB = None
 debug = False
 debug_event_ids = []
 
+global_metrics = []
 def analyze_data(
     data,
     use_cuda=False,
@@ -641,8 +642,8 @@ def run_analysis(
         input_thread = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
         input_thread.start()
 
-    #metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
-    #metrics_thread.start()
+    metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+    metrics_thread.start()
 
     rets = []
     num_processed = 0
@@ -698,7 +699,7 @@ def run_analysis(
 
     #clean up threads
     threadk.set_tokill(True)
-    #metrics_thread.join() 
+    metrics_thread.join() 
 
     # #save output
     # ret = sum(rets, Results({}))
@@ -713,8 +714,20 @@ def run_analysis(
     t1 = time.time()
     dt = t1 - t0
     print("In run_analysis, processed {nev_loaded:.2E} ({nev:.2E} raw NanoAOD equivalent) events in total {size:.2f} GB, {dt:.1f} seconds, {evspeed:.2E} Hz, {sizespeed:.2f} MB/s".format(
-        nev=nev_total, nev_loaded=nev_loaded, dt=dt, size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt)
+        nev=nev_total, nev_loaded=nev_loaded, dt=dt,
+        size=processed_size_mb/1024.0, evspeed=nev_total/dt, sizespeed=processed_size_mb/dt,
+        )
     )
+   
+    if len(global_metrics) > 0:
+        metrics_results = {}
+        for k in global_metrics[0]: 
+            metrics_results[k] = []
+        for gm in global_metrics:
+            for k in gm.keys():
+                metrics_results[k] += [gm[k]]
+        for k in metrics_results.keys():
+            print("metric {0} avg={1:.2f} max={2:.2f}".format(k, np.mean(metrics_results[k]), np.max(metrics_results[k])))
 
     bench_ret = {}
     bench_ret.update(cmdline_args.__dict__)
@@ -2260,6 +2273,7 @@ def parse_nvidia_smi():
         return {"gpu": 0, "mem": 0}
 
 def threaded_metrics(tokill, train_batches_queue):
+    global global_metrics
     c = psutil.disk_io_counters()
     bytes_read_start = c.read_bytes
     thisproc = psutil.Process()
@@ -2274,20 +2288,20 @@ def threaded_metrics(tokill, train_batches_queue):
         bytes_read_start = c.read_bytes
 
         cpu_pct = thisproc.cpu_percent()
+        cpu_times = thisproc.cpu_times()
         memory_info = thisproc.memory_info()
         d = parse_nvidia_smi()
 
-        print("metrics time=", time.time(),
-              " disk_io=", bytes_read_speed,
-              " cpu_percent=", cpu_pct,
-              # "cpu_iowait=", cpu_times.iowait,
-              " rss=", memory_info.rss,
-              " gpu_util=", d["gpu"],
-              " gpu_mem=", d["mem"],
-              " queue_size=", train_batches_queue.qsize(),
-              sep="", file=logfile
-            )
-        logfile.flush()
+        metrics_dict = {
+            "disk_io": bytes_read_speed,
+            "cpu_percent": cpu_pct,
+            #"cpu_iowait=": cpu_times.iowait,
+            "rss": memory_info.rss/1024.0/1024.0,
+            "gpu_util": d["gpu"],
+            "gpu_mem": d["mem"],
+            "queue_size": train_batches_queue.qsize(),
+        }
+        global_metrics += [metrics_dict]
         time.sleep(dt)
     print("threaded_metrics done")
     logfile.close()
