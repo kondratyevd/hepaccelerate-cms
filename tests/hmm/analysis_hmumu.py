@@ -496,6 +496,10 @@ def main(args, datasets):
     
         #save all dataset filenames to a json file 
         print("Creating a json dump of all the dataset filenames based on data found in {0}".format(args.datapath))
+        if os.path.isfile(cache_filename):
+            print("Cache file {0} already exists, we will not overwrite it to be safe.".format(cache_filename), file=sys.stderr)
+            print("Delete it or change --cache-location and try again.", file=sys.stderr)
+            sys.exit(1)
         with open(cache_filename, "w") as fi:
             fi.write(json.dumps(filenames_cache, indent=2))
 
@@ -593,6 +597,11 @@ def main(args, datasets):
     if do_prof:
         stats = yappi.get_func_stats()
         stats.save(filename, type='callgrind')
+
+    import resource
+    total_memory = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    total_memory += resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    print("maxrss={0} MB".format(total_memory/1024))
 
 if __name__ == "__main__":
 
