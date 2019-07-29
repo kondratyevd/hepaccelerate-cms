@@ -105,9 +105,13 @@ jec_unc = ['AbsoluteFlavMap', 'AbsoluteMPFBias', 'AbsoluteSample', 'AbsoluteScal
     'PileUpPtHF', 'PileUpPtRef', 'RelativeBal', 'RelativeFSR', 'RelativeJEREC1',
     'RelativeJEREC2', 'RelativeJERHF', 'RelativePtBB', 'RelativePtEC1', 'RelativePtEC2',
     'RelativePtHF', 'RelativeSample', 'RelativeStatEC', 'RelativeStatFSR', 'RelativeStatHF',
-    'SinglePionECAL', 'SinglePionHCAL', 'SubTotalAbsolute', 'SubTotalMC', 'SubTotalPileUp',
-    'SubTotalPt', 'SubTotalRelative', 'SubTotalScale', 'TimePtEta', 'Total', 'TotalNoFlavor',
-    'TotalNoFlavorNoTime', 'TotalNoTime'] 
+    'SinglePionECAL', 'SinglePionHCAL']
+
+#These subtotals can be used for cross-checks
+#, 'SubTotalAbsolute', 'SubTotalMC', 'SubTotalPileUp',
+#    'SubTotalPt', 'SubTotalRelative', 'SubTotalScale', 'TimePtEta', 'Total', 'TotalNoFlavor',
+#    'TotalNoFlavorNoTime', 'TotalNoTime']
+ 
 uncertainties = jec_unc + ["puWeight"]
 shape_systematics = jec_unc + ["jer", "puWeight"]
 common_scale_uncertainties = {
