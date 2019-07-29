@@ -1469,7 +1469,6 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactor
             NUMPY_LIB.asnumpy(dnn_vars_arr),
             batch_size=dnn_vars_arr.shape[0])[:, 0]
         )
-        # dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel)
     else:
         dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel)
 
@@ -2277,7 +2276,6 @@ def threaded_metrics(tokill, train_batches_queue):
     c = psutil.disk_io_counters()
     bytes_read_start = c.read_bytes
     thisproc = psutil.Process()
-    logfile = open("metrics.log", "a")
 
     while not tokill(): 
         dt = 1.0
@@ -2304,5 +2302,4 @@ def threaded_metrics(tokill, train_batches_queue):
         global_metrics += [metrics_dict]
         time.sleep(dt)
     print("threaded_metrics done")
-    logfile.close()
     return

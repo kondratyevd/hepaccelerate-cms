@@ -9,8 +9,12 @@ env
 workdir=`pwd`
 tar xf jobfiles.tgz
 
+for word in "$@"; do
+    echo $workdir/jobfiles/$word.json >> args.txt
+done
+
 export JOBFILE=$1
-export NTHREADS=8
+export NTHREADS=2
 export PYTHONPATH=coffea:hepaccelerate:. 
 export HEPACCELERATE_CUDA=0
 export KERAS_BACKEND=tensorflow
@@ -27,7 +31,7 @@ python3 tests/hmm/analysis_hmumu.py \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
     --datapath /storage/user/jpata/ \
     --out $workdir/$OUTDIR \
-    --jobfile $workdir/jobfiles/$JOBFILE.json
+    --jobfiles-load $workdir/args.txt
 
 
 cp -R $workdir/$OUTDIR /storage/user/$USER/hmm/

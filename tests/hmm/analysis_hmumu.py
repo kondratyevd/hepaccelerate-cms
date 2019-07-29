@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--nthreads', '-t', action='store', help='Number of CPU threads or workers to use', type=int, default=4, required=False)
     parser.add_argument('--datapath', '-p', action='store', help='Input file path that contains the CMS /store/... folder, e.g. /mnt/hadoop', required=False, default="/storage/user/jpata")
     parser.add_argument('--maxchunks', '-m', action='store', help='Maximum number of files to process for each dataset', default=1, type=int)
-    parser.add_argument('--chunksize', '-c', action='store', help='Number of files to process simultaneously (larger is faster)', default=2, type=int)
+    parser.add_argument('--chunksize', '-c', action='store', help='Number of files to process simultaneously (larger is faster, but uses more memory)', default=1, type=int)
     parser.add_argument('--cache-location', action='store', help='Cache location', default='./mycache', type=str)
     parser.add_argument('--out', action='store', help='Output location', default='out', type=str)
     parser.add_argument('--datasets', action='append', help='Dataset names process', type=str, required=False)
@@ -51,6 +51,7 @@ def parse_args():
     parser.add_argument('--do-profile', action='store_true', help='Profile the code with yappi')
     parser.add_argument('--disable-tensorflow', action='store_true', help='Disable loading and evaluating the tensorflow model')
     parser.add_argument('--jobfiles', action='store', help='Jobfiles to process by the "cache" or "analyze" step', default=None, nargs='+', required=False)
+    parser.add_argument('--jobfiles-load', action='store', help='Load the list of jobfiles to process from this file', default=None, required=False)
     
     args = parser.parse_args()
 
@@ -321,11 +322,11 @@ class AnalysisCorrections:
 
             #load DNN model
             import keras
-            dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.h5")
-            dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
+            self.dnn_model = keras.models.load_model("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.h5")
+            self.dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
 
             if args.use_cuda:
-                dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
+                self.dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
 
 def main(args, datasets):
 
@@ -529,6 +530,8 @@ def main(args, datasets):
     #For each dataset, find out which chunks we want to process
     if "cache" in args.action or "analyze" in args.action:
         jobfile_data = []
+        if not (args.jobfiles_load is None):
+            args.jobfiles = [l.strip() for l in open(args.jobfiles_load).readlines()]
         if args.jobfiles is None:
             print("You did not specify to process specific dataset chunks, assuming you want to process all chunks")
             print("If this is not true, please specify e.g. --jobfiles data_2018_0.json data_2018_1.json ...")
