@@ -326,6 +326,7 @@ class AnalysisCorrections:
             self.dnn_normfactors = np.load("data/27vars_trainTest_70_30_vbf_DYjetBin_25July2019.npy")
 
             if args.use_cuda:
+                import cupy
                 self.dnn_normfactors = cupy.array(dnn_normfactors[0]), cupy.array(dnn_normfactors[1])
 
 def main(args, datasets):
@@ -508,7 +509,7 @@ def main(args, datasets):
     jobfile_data = []
     print("Loading list of filenames from {0}".format(cache_filename))
     if not os.path.isfile(cache_filename):
-        raise Exception("Cached dataset filenames not found in {0}, please run this code with --action cache".format(
+        raise Exception("Cached dataset list of filenames not found in {0}, please run this code with --action cache".format(
             cache_filename))
     filenames_cache = json.load(open(cache_filename, "r"))
 
