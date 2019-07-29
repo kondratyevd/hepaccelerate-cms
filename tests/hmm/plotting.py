@@ -306,6 +306,9 @@ def save_datacard(dc, outfile):
         fi[histo_name] = to_th1(dc[histo_name], histo_name)
     fi.close()
 
+def create_datacard_combine_wrap(args):
+    return create_datacard_combine(*args)
+
 def create_datacard_combine(
     dict_procs, parameter_name,
     all_processes,
@@ -557,6 +560,7 @@ if __name__ == "__main__":
         genweights = {}
         weight_xs = {}
         datacard_args = []
+        plot_args = []
         
         analysis = "results"
         input_folder = cmdline_args.input
@@ -632,7 +636,7 @@ if __name__ == "__main__":
                         "well as --keep-processes commandline option."
                         )
 
-                create_datacard_combine(
+                datacard_args += [(
                     res,
                     analysis,
                     ["data"] + mc_samples,
@@ -644,7 +648,7 @@ if __name__ == "__main__":
                     common_scale_uncertainties,
                     scale_uncertainties,
                     outdir_datacards + "/{0}.txt".format(var)
-                )
+                )]
 
                 weight_scenarios = ["nominal"]
                 for weight in weight_scenarios:
@@ -653,13 +657,14 @@ if __name__ == "__main__":
                     except KeyError:
                         print("Histogram {0} not found for data, skipping".format(var))
                         continue
-                    datacard_args += [(
+                    plot_args += [(
                         res, hdata, mc_samples, analysis,
                         var, weight, weight_xs, int_lumi, outdir, era)]
-        rets = list(pool.map(make_pdf_plot, datacard_args))
+        rets = list(pool.map(create_datacard_combine_wrap, datacard_args))
+        rets = list(pool.map(make_pdf_plot, plot_args))
 
-        for args, retval in zip(datacard_args, rets):
-            res, hd, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir, datataking_year = args
-            htot_nominal, hd, htot_variated, hdelta_quadrature = retval
-            wd = wasserstein_distance(htot_nominal.contents/np.sum(htot_nominal.contents), hd.contents/np.sum(hd.contents))
-            print("DataToMC", analysis, var, wd)
+        #for args, retval in zip(datacard_args, rets):
+        #    res, hd, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir, datataking_year = args
+        #    htot_nominal, hd, htot_variated, hdelta_quadrature = retval
+        #    wd = wasserstein_distance(htot_nominal.contents/np.sum(htot_nominal.contents), hd.contents/np.sum(hd.contents))
+        #    print("DataToMC", analysis, var, wd)
