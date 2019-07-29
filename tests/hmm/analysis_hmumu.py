@@ -31,6 +31,8 @@ from coffea.jetmet_tools import JetResolution
 from coffea.jetmet_tools import JetCorrectionUncertainty
 from coffea.jetmet_tools import JetResolutionScaleFactor
 
+from concurrent.futures import ProcessPoolExecutor, wait, ALL_COMPLETED
+
 from pars import datasets, datasets_sync
 
 def parse_args():
@@ -579,24 +581,11 @@ def main(args, datasets):
         run_analysis(args, outpath, jobfile_data, analysis_parameters, analysis_corrections)
 
     if "merge" in args.action:
-        for dataset in datasets:
-            dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
-            results = []
-            partial_results = glob.glob(outpath + "/{0}_{1}_*.pkl".format(dataset_name, dataset_era))
-            print("Merging {0} partial results for dataset {1}_{2}".format(len(partial_results), dataset_name, dataset_era))
-            for res_file in partial_results:
-                res = pickle.load(open(res_file, "rb"))
-                results += [res]
-            results = sum(results, Results({}))
-            try:
-                os.makedirs(args.out + "/results")
-            except FileExistsError as e:
-                pass
-            result_filename = args.out + "/results/{0}_{1}.pkl".format(dataset_name, dataset_era)
-            print("Saving results to {0}".format(result_filename))
-            with open(result_filename, "wb") as fi:
-                pickle.dump(results, fi, protocol=pickle.HIGHEST_PROTOCOL) 
-
+        with ProcessPoolExecutor(max_workers=args.nthreads) as executor:
+            for dataset in datasets:
+                dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
+                fut = executor.submit(merge_partial_results, dataset_name, dataset_era, outpath)
+        print("done merging")
     if do_prof:
         stats = yappi.get_func_stats()
         stats.save(filename, type='callgrind')
@@ -605,6 +594,24 @@ def main(args, datasets):
     total_memory = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     total_memory += resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     print("maxrss={0} MB".format(total_memory/1024))
+
+def merge_partial_results(dataset_name, dataset_era, outpath):
+    results = []
+    partial_results = glob.glob(outpath + "/{0}_{1}_*.pkl".format(dataset_name, dataset_era))
+    print("Merging {0} partial results for dataset {1}_{2}".format(len(partial_results), dataset_name, dataset_era))
+    for res_file in partial_results:
+        res = pickle.load(open(res_file, "rb"))
+        results += [res]
+    results = sum(results, Results({}))
+    try:
+        os.makedirs(args.out + "/results")
+    except FileExistsError as e:
+        pass
+    result_filename = args.out + "/results/{0}_{1}.pkl".format(dataset_name, dataset_era)
+    print("Saving results to {0}".format(result_filename))
+    with open(result_filename, "wb") as fi:
+        pickle.dump(results, fi, protocol=pickle.HIGHEST_PROTOCOL) 
+    return
 
 if __name__ == "__main__":
 

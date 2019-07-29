@@ -2119,8 +2119,15 @@ def create_dataset_jobfiles(
             "dataset_num_chunk": ijob,
         }
         job_descriptions += [job_description]
-        with open(outpath + "/jobfiles/{0}_{1}_{2}.json".format(dataset_name, dataset_era, ijob), "w") as fi:
-            fi.write(json.dumps(job_description, indent=2))
+        fn = outpath + "/jobfiles/{0}_{1}_{2}.json".format(dataset_name, dataset_era, ijob)
+        if os.path.isfile(fn):
+            if ijob == 0:
+                print("Jobfile {0} exists, not recreating this one or others for this dataset".format(fn))
+                print("Delete the folder {0}/jobfiles if you would like the files to be recreated".format(outpath))
+                print("You might want this when you changed the --chunksize option.")
+        else:
+            with open(fn, "w") as fi:
+                fi.write(json.dumps(job_description, indent=2))
 
         ijob += 1
     return job_descriptions
