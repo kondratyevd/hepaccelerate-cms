@@ -327,6 +327,7 @@ def analyze_data(
                 num_good_genjets = ha.sum_in_offsets(genJet, out_genjet_mask, mask_events, genJet.masks["all"], NUMPY_LIB.int8)
 
                 genjet_inv_mass, _ = compute_inv_mass(genJet, mask_events, out_genjet_mask)
+                genjet_inv_mass[num_good_genjets<2] = 0
                 ret_jet["dijet_inv_mass_gen"] = genjet_inv_mass
                 ret_jet["num_good_genjets"] = num_good_genjets
                 ret_jet_nominal = ret_jet
@@ -364,17 +365,14 @@ def analyze_data(
 
             #apply VBF filter cut
             if is_mc and dataset_name in parameters["vbf_filter"]:
-                mask_dijet_genmass = (ret_jet_nominal["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
-                mask_2gj = ret_jet_nominal["num_good_genjets"]>=2
-                invert_mask = parameters["vbf_filter"][dataset_name]
-                if invert_mask:
-                    mask_dijet_genmass = NUMPY_LIB.invert(mask_dijet_genmass)
-
-                mask_out = NUMPY_LIB.ones_like(mask_dijet_genmass)
-                mask_out[mask_2gj & NUMPY_LIB.invert(mask_dijet_genmass)] = False
-                if debug:
-                    print("sample", dataset_name, "numev", len(mask_out), "2gj", mask_2gj.sum(), "2gj&&mjj", (mask_2gj&mask_dijet_genmass).sum(), "out", mask_out.sum()) 
-                dnn_presel = dnn_presel & mask_out
+                if jet_syst_name[0] == "nominal":
+                    hists["validation_hist__dnn_presel__dijet_inv_mass_gen"] = fill_with_weights(
+                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, NUMPY_LIB.linspace(0,1000,41, dtype=NUMPY_LIB.float32))
+                mask_vbf_filter = vbf_genfilter(ret_jet_nominal, parameters, dataset_name)
+                dnn_presel = dnn_presel & mask_vbf_filter
+                if jet_syst_name[0] == "nominal":
+                    hists["validation_hist__dnn_presel_vbffilter__dijet_inv_mass_gen"] = fill_with_weights(
+                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, NUMPY_LIB.linspace(0,1000,41, dtype=NUMPY_LIB.float32))
 
             #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
             hists_dnn = {}
@@ -563,6 +561,24 @@ def analyze_data(
         cuda.synchronize()
  
     return ret
+
+def vbf_genfilter(ret_jet_nominal, parameters, dataset_name):
+    mask_dijet_genmass = (ret_jet_nominal["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
+    mask_2gj = ret_jet_nominal["num_good_genjets"]>=2
+    invert_mask = parameters["vbf_filter"][dataset_name]
+    if invert_mask:
+        mask_dijet_genmass = NUMPY_LIB.invert(mask_dijet_genmass)
+
+    mask_out = NUMPY_LIB.ones_like(mask_dijet_genmass)
+    mask_out[mask_2gj & NUMPY_LIB.invert(mask_dijet_genmass)] = False
+    if dataset_name == "dy_m105_160_vbf_amc":
+        import pdb;pdb.set_trace()
+    print("VBF genfilter on sample", dataset_name,
+        "numev", len(mask_out), "2gj", mask_2gj.sum(),
+        "2gj&&mjj", (mask_2gj&mask_dijet_genmass).sum(), "out", mask_out.sum()
+    )
+ 
+    return mask_out
 
 def run_cache(
     cmdline_args,
