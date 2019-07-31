@@ -204,16 +204,16 @@ def analyze_data(
         hists,
         "hist__dimuon__leading_muon_pt",
         "nominal", leading_muon["pt"], weights,
-        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101))
+        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32))
     
     update_histograms_systematic(
         hists,
         "hist__dimuon__subleading_muon_pt",
         "nominal", subleading_muon["pt"], weights,
-        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101))
+        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32))
 
     hists["hist__dimuon__npvs"] = fill_with_weights(
-        scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101))
+        scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32))
     
     #Just a check to verify that there are exactly 2 muons per event
     if doverify:
@@ -285,7 +285,7 @@ def analyze_data(
         #print("computing variated pt for", uncertainty_name)
         var_up_down = jet_systematics.get_variated_pts(uncertainty_name)
         for jet_syst_name, jet_pt_vec in var_up_down.items():
-            sys.stdout.write(".");sys.stdout.flush()
+            print("variated jec", jet_syst_name[0], jet_syst_name[1], (jet_pt_vec - jets_passing_id.pt).mean())
             # For events where the JEC/JER was variated, fill only the nominal weight
             weights_selected = select_weights(weights, jet_syst_name)
 
@@ -335,7 +335,7 @@ def analyze_data(
 
             # Set this default value as in Nan and Irene's code
             ret_jet["dijet_inv_mass"][ret_jet["num_jets"] < 2] = -1000.0
-
+ 
             # Get the data for the leading and subleading jets as contiguous vectors
             leading_jet = jets_passing_id.select_nth(
                 0, ret_mu["selected_events"], ret_jet["selected_jets"],
@@ -354,7 +354,7 @@ def analyze_data(
                 hists,
                 "hist__dimuon__dijet_inv_mass",
                 jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                ret_mu["selected_events"], NUMPY_LIB.linspace(0, 1000, 41))
+                ret_mu["selected_events"], NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32))
 
             #compute DNN input variables in 2 muon, >=2jet region
             dnn_presel = (
@@ -439,7 +439,7 @@ def analyze_data(
                 hists,
                 "hist__dnn_presel__inv_mass",
                 jet_syst_name, higgs_inv_mass, weights_selected,
-               dnn_presel, NUMPY_LIB.linspace(70, 150, 41))
+               dnn_presel, NUMPY_LIB.linspace(70, 150, 41, dtype=NUMPY_LIB.float32))
 
             #Save histograms for numerical categories (cat5 only right now) and all mass bins
             for massbin_name, massbin_msk, mass_edges in [
@@ -451,19 +451,19 @@ def analyze_data(
                     hists,
                     "hist__dimuon_invmass_{0}__inv_mass".format(massbin_name),
                     jet_syst_name, higgs_inv_mass, weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41, dtype=NUMPY_LIB.float32))
 
                 update_histograms_systematic(
                     hists,
                     "hist__dimuon_invmass_{0}__numjet".format(massbin_name),
                     jet_syst_name, ret_jet["num_jets"], weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 10, 11))
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
 
                 update_histograms_systematic(
                     hists,
                     "hist__dimuon_invmass_{0}__dijet_inv_mass".format(massbin_name),
                     jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 1000, 41))
+                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32))
 
                 for icat in [5, ]:
                     msk_cat = category == icat
@@ -473,61 +473,61 @@ def analyze_data(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, "dnn_pred"),
                         jet_syst_name, dnn_vars["dnn_pred"], weights_dnn,
-                        (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(*hb))
+                        (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(hb[0], hb[1], hb[2], dtype=NUMPY_LIB.float32))
                     
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
                         jet_syst_name, higgs_inv_mass, weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41, dtype=NUMPY_LIB.float32))
 
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
                         jet_syst_name, leading_jet["pt"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61, dtype=NUMPY_LIB.float32))
                     
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
                         jet_syst_name, subleading_jet["pt"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61, dtype=NUMPY_LIB.float32))
 
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__leading_jet_eta".format(massbin_name, icat),
                         jet_syst_name, leading_jet["eta"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32))
                     
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_eta".format(massbin_name, icat),
                         jet_syst_name, subleading_jet["eta"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32))
 
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__dijet_inv_mass".format(massbin_name, icat),
                         jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(400, 1000.0, 41))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(400, 1000.0, 41, dtype=NUMPY_LIB.float32))
 
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__num_soft_jets".format(massbin_name, icat),
                         jet_syst_name, scalars["SoftActivityJetNjets5"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
                     
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__num_jets".format(massbin_name, icat),
                         jet_syst_name, ret_jet["num_jets"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
                     
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__pt_balance".format(massbin_name, icat),
                         jet_syst_name, pt_balance, weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 5, 41))
+                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 5, 41, dtype=NUMPY_LIB.float32))
 
                     #save all DNN input variables
                     for varname in dnn_vars.keys():
@@ -539,7 +539,7 @@ def analyze_data(
                                 hists,
                                 "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, varname),
                                 jet_syst_name, dnn_vars[varname], weights_dnn,
-                                (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(*hb))
+                                (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(hb[0], hb[1], hb[2], dtype=NUMPY_LIB.float32))
 
         #end of isyst loop
     #end of uncertainty_name loop
@@ -752,6 +752,7 @@ def event_loop(train_batches_queue, use_cuda, **kwargs):
 
     ret = {}
     for parameter_set_name, parameter_set in parameters.items():
+        print("doing analysis on parameter set", parameter_set_name)
         ret[parameter_set_name] = ds.analyze(
             analyze_data,
             use_cuda = use_cuda,
@@ -1028,10 +1029,10 @@ def compute_inv_mass(objects, mask_events, mask_objects):
             "Event mask size {0} did not match number of events {1}".format(
                 len(mask_events), objects.numevents()))
 
-    pt = objects.pt
-    eta = objects.eta
-    phi = objects.phi
-    mass = objects.mass
+    pt = NUMPY_LIB.array(objects.pt, dtype=NUMPY_LIB.float32)
+    eta = NUMPY_LIB.array(objects.eta, dtype=NUMPY_LIB.float32)
+    phi = NUMPY_LIB.array(objects.phi, dtype=NUMPY_LIB.float32)
+    mass = NUMPY_LIB.array(objects.mass, dtype=NUMPY_LIB.float32)
 
     px = pt * NUMPY_LIB.cos(phi)
     py = pt * NUMPY_LIB.sin(phi)
@@ -1042,8 +1043,10 @@ def compute_inv_mass(objects, mask_events, mask_objects):
     py_total = ha.sum_in_offsets(objects, py, mask_events, mask_objects)
     pz_total = ha.sum_in_offsets(objects, pz, mask_events, mask_objects)
     e_total = ha.sum_in_offsets(objects, e, mask_events, mask_objects)
+    
     inv_mass = NUMPY_LIB.sqrt(-(px_total**2 + py_total**2 + pz_total**2 - e_total**2))
     pt_total = NUMPY_LIB.sqrt(px_total**2 + py_total**2)
+    
     return inv_mass, pt_total
 
 def fill_with_weights(values, weight_dict, mask, bins):
@@ -1078,6 +1081,8 @@ def fix_large_weights(weights, maxw=10.0):
 def compute_pu_weights(pu_corrections_target, weights, mc_nvtx, reco_nvtx):
     mc_nvtx = NUMPY_LIB.array(mc_nvtx, dtype=NUMPY_LIB.float32)
     pu_edges, (values_nom, values_up, values_down) = pu_corrections_target
+
+    pu_edges = NUMPY_LIB.array(pu_edges, dtype=NUMPY_LIB.float32)
 
     src_pu_hist = get_histogram(mc_nvtx, weights, pu_edges)
     norm = sum(src_pu_hist.contents)
@@ -1469,8 +1474,9 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactor
             NUMPY_LIB.asnumpy(dnn_vars_arr),
             batch_size=dnn_vars_arr.shape[0])[:, 0]
         )
+        dnn_pred = NUMPY_LIB.array(dnn_pred, dtype=NUMPY_LIB.float32)
     else:
-        dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel)
+        dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel, dtype=NUMPY_LIB.float32)
 
     #Fill the histograms with DNN inputs
     dnn_mask = NUMPY_LIB.ones(nev_dnn_presel, dtype=NUMPY_LIB.bool)
@@ -1481,7 +1487,7 @@ def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactor
         hb = parameters["dnn_input_histogram_bins"][vn]
         hists["hist__dnn_presel__{0}".format(vn)] = fill_with_weights(
            subarr, weights_dnn, dnn_mask,
-           NUMPY_LIB.linspace(*hb)
+           NUMPY_LIB.linspace(hb[0], hb[1], hb[2], dtype=NUMPY_LIB.float32)
         )
     return dnn_vars, dnn_pred, weights_dnn
 
@@ -1649,7 +1655,7 @@ class JetTransformer:
     def get_variated_pts(self, variation_name):
         if variation_name in self.jet_uncertainty_names:
             startfrom = "pt_jec"
-            corrs_up_down = self.apply_jec_unc(startfrom, variation_name)
+            corrs_up_down = NUMPY_LIB.array(self.apply_jec_unc(startfrom, variation_name), dtype=NUMPY_LIB.float32)
             ptvec = getattr(self, startfrom)
             return {
                 (variation_name, "up"): ptvec*corrs_up_down[:, 0],
