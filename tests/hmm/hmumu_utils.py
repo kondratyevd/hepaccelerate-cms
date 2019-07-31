@@ -570,8 +570,6 @@ def vbf_genfilter(ret_jet_nominal, parameters, dataset_name):
 
     mask_out = NUMPY_LIB.ones_like(mask_dijet_genmass)
     mask_out[mask_2gj & NUMPY_LIB.invert(mask_dijet_genmass)] = False
-    if dataset_name == "dy_m105_160_vbf_amc":
-        import pdb;pdb.set_trace()
     print("VBF genfilter on sample", dataset_name,
         "numev", len(mask_out), "2gj", mask_2gj.sum(),
         "2gj&&mjj", (mask_2gj&mask_dijet_genmass).sum(), "out", mask_out.sum()
