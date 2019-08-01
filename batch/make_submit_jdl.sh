@@ -9,7 +9,7 @@ tar -cvzf jobfiles.tgz jobfiles
 \ls -1 jobfiles/*.json | sed "s/jobfiles\///" | sed "s/\.json$//" > jobfiles.txt
 
 #Run 50 different random chunks per job
-python chunk_submits.py 50 > jobfiles_merged.txt
+python chunk_submits.py 20 > jobfiles_merged.txt
 
 #Prepare submit script
 cat analyze.jdl > submit.jdl
