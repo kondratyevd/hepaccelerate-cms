@@ -1,6 +1,5 @@
 stages:
   - build
-  - test
   - analyze 
 
 #image used to compile and run code
@@ -17,11 +16,6 @@ libhmm:
   artifacts:
     paths:
     - tests/hmm/libhmm.so
-
-test-libhmm:
-  stage: test
-  script:
-    - PYTHONPATH=hepaccelerate:. singularity exec ${singularity_image} python3 tests/hmm/test_libhmm.py
 
 run-analyze:
   stage: analyze
