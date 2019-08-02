@@ -384,12 +384,14 @@ def main(args, datasets):
                 },
 
             "muon_pt": 20,
-            "muon_pt_leading": {"2016": 26.0, "2017": 26.0, "2018": 26.0},
+            "muon_pt_leading": {"2016": 26.0, "2017": 29.0, "2018": 26.0},
             "muon_eta": 2.4,
             "muon_iso": 0.25,
             "muon_id": {"2016": "medium", "2017": "medium", "2018": "medium"},
             "muon_trigger_match_dr": 0.1,
-            
+            "muon_iso_trigger_matched": 0.15,
+            "muon_id_trigger_matched": {"2016": "tight", "2017": "tight", "2018": "tight"},
+ 
             "do_rochester_corrections": True, 
             "do_lepton_sf": True,
             
@@ -401,6 +403,8 @@ def main(args, datasets):
             "jet_eta": 4.7,
             "jet_id": "tight",
             "jet_puid": "loose",
+            "jet_veto_eta": [2.65, 3.139],
+            "jet_veto_raw_pt": 50.0,  
             "jet_btag": {"2016": 0.6321, "2017": 0.4941, "2018": 0.4184},
             "do_factorized_jec": args.do_factorized_jec,
 

@@ -178,7 +178,8 @@ def analyze_data(
         muons, trigobj, mask_events,
         parameters["muon_pt_leading"][dataset_era], parameters["muon_pt"],
         parameters["muon_eta"], parameters["muon_iso"],
-        parameters["muon_id"][dataset_era], parameters["muon_trigger_match_dr"]
+        parameters["muon_id"][dataset_era], parameters["muon_trigger_match_dr"],
+        parameters["muon_iso_trigger_matched"], parameters["muon_id_trigger_matched"][dataset_era]
     )
     print("muon selection eff", ret_mu["selected_muons"].sum() / float(muons.numobjects()))
     
@@ -257,7 +258,11 @@ def analyze_data(
         parameters["jet_eta"],
         parameters["jet_mu_dr"],
         parameters["jet_id"],
-        parameters["jet_puid"])
+        parameters["jet_puid"],
+        parameters["jet_veto_eta"][0],
+        parameters["jet_veto_eta"][1],
+        parameters["jet_veto_raw_pt"],
+        dataset_era)
     print("jet selection eff based on id", selected_jets_id.sum() / float(len(selected_jets_id)))
 
     jets_passing_id = jets.select_objects(selected_jets_id)
@@ -805,7 +810,7 @@ def get_selected_muons(
     muons, trigobj, mask_events,
     mu_pt_cut_leading, mu_pt_cut_subleading,
     mu_aeta_cut, mu_iso_cut, muon_id_type,
-    muon_trig_match_dr):
+    muon_trig_match_dr, mu_iso_trig_matched_cut, muon_id_trig_matched_type):
     """
     Given a list of muons in events, selects the muons that pass quality, momentum and charge criteria.
     Selects events that have at least 2 such muons. Selections are made by producing boolean masks.
@@ -819,14 +824,21 @@ def get_selected_muons(
     mu_iso_cut (float) - cut to choose isolated muons
     muon_id_type (string) - "medium" or "tight" for the muon ID
     muon_trig_match_dr (float) - dR matching criterion between trigger object and leading muon
-
+    mu_iso_trig_matched_cut (float) - tight isolation requirement the trigger matched muon
+    muon_id_trig_matched_type (string) - "tight" muon ID requirement for trigger matched muon
     """
     passes_iso = muons.pfRelIso04_all < mu_iso_cut
+    passes_iso_trig_matched = muons.pfRelIso04_all < mu_iso_trig_matched_cut
 
     if muon_id_type == "medium":
         passes_id = muons.mediumId == 1
     elif muon_id_type == "tight":
         passes_id = muons.tightId == 1
+    else:
+        raise Exception("unknown muon id: {0}".format(muon_id_type))
+
+    if muon_id_trig_matched_type == "tight":
+        passes_id_trig_matched = muons.tightId == 1
     else:
         raise Exception("unknown muon id: {0}".format(muon_id_type))
 
@@ -840,10 +852,15 @@ def get_selected_muons(
         passes_subleading_pt & passes_aeta
     )
 
+    muons_passing_id_trig_matched =  (
+        passes_global & passes_iso_trig_matched & passes_id_trig_matched &
+        passes_subleading_pt & passes_aeta
+    )
+
     #Get muons that are high-pt and are matched to trigger object
     mask_trigger_objects_mu = (trigobj.id == 13)
     muons_matched_to_trigobj = NUMPY_LIB.invert(ha.mask_deltar_first(
-        muons, muons_passing_id & passes_leading_pt, trigobj,
+        muons, muons_passing_id_trig_matched & passes_leading_pt, trigobj,
         mask_trigger_objects_mu, muon_trig_match_dr
     ))
     muons.attrs_data["triggermatch"] = muons_matched_to_trigobj
@@ -918,7 +935,11 @@ def get_selected_jets_id(
     jet_eta_cut,
     jet_dr_cut,
     jet_id,
-    jet_puid):
+    jet_puid,
+    jet_veto_eta_lower_cut,
+    jet_veto_eta_upper_cut,
+    jet_veto_raw_pt,
+    dataset_era):
 
     #Jet ID flags bit0 is loose (always false in 2017 since it does not exist), bit1 is tight, bit2 is tightLepVeto
     if jet_id == "tight":
@@ -938,10 +959,20 @@ def get_selected_jets_id(
         pass_jet_puid = NUMPY_LIB.ones(jets.numobjects(), dtype=NUMPY_LIB.bool)
 
     pass_qgl = jets.qgl > -1 
-    selected_jets = (
-        (NUMPY_LIB.abs(jets.eta) < jet_eta_cut) &
-        pass_jetid & pass_jet_puid & pass_qgl
-    )
+    if dataset_era == "2017":
+    	selected_jets = (
+        	(NUMPY_LIB.abs(jets.eta) < jet_eta_cut) &
+        	pass_jetid & pass_jet_puid & pass_qgl &
+                ((compute_jet_raw_pt(jets) > jet_veto_raw_pt) 
+                | (NUMPY_LIB.abs(jets.eta) > jet_veto_eta_upper_cut)
+                | (NUMPY_LIB.abs(jets.eta) < jet_veto_eta_lower_cut))
+        )
+    else:
+    	selected_jets = (
+        	(NUMPY_LIB.abs(jets.eta) < jet_eta_cut) &
+       	        pass_jetid & pass_jet_puid & pass_qgl
+        )
+
     jets_pass_dr = ha.mask_deltar_first(
         jets, selected_jets, muons,
         muons.masks["iso_id_aeta"], jet_dr_cut)
@@ -1023,6 +1054,13 @@ def get_selected_electrons(electrons, pt_cut, eta_cut, id_type):
     return {
         "additional_electron_sel": final_electron_sel,
     }
+
+def compute_jet_raw_pt(jets):
+    """
+    Computs the raw pt of a jet.
+    """
+    raw_pt = jets.pt * (1.0 - jets.rawFactor)
+    return raw_pt
 
 def compute_inv_mass(objects, mask_events, mask_objects):
     """
