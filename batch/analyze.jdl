@@ -19,4 +19,4 @@ RequestCpus = 4
 
 transfer_input_files = jobfiles.tgz
 
-Environment = USER=$ENV(USER);CONDORJOBID=$(Process)
+Environment = USER=$ENV(USER);CONDORJOBID=$(Process);SUBMIT_DIR=$ENV(SUBMIT_DIR)
