@@ -255,7 +255,7 @@ def analyze_data(
                 is_mc, use_cuda
             )
             print("jet analysis syst={0} sdir={1} mean_pt_change={2:.4f} num_passing_jets={3} ".format(
-                jet_syst_name[0], jet_syst_name[1], jet_pt_change, ret_jet["selected_jets"].sum())
+                jet_syst_name[0], jet_syst_name[1], float(jet_pt_change), int(ret_jet["selected_jets"].sum()))
             )
 
             #print("jet selection eff based on ID & pt", ret_jet["selected_jets"].sum() / float(len(ret_jet["selected_jets"])))
