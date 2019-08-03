@@ -37,9 +37,17 @@ NUMPY_LIB = None
 
 #Use these to turn on debugging
 debug = False
+
+#event IDs for which to print out detailed information
 debug_event_ids = []
 
+#list to collect performance data in
 global_metrics = []
+
+def fix_inf_nan(data, default=0):
+    data[NUMPY_LIB.isinf(data)] = default
+    data[NUMPY_LIB.isnan(data)] = default
+
 def analyze_data(
     data,
     use_cuda=False,
@@ -72,62 +80,21 @@ def analyze_data(
     mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
 
     #Compute integrated luminosity on data sample and apply golden JSON
-    int_lumi = 0
-    if not is_mc:
-        runs = NUMPY_LIB.asnumpy(scalars["run"])
-        lumis = NUMPY_LIB.asnumpy(scalars["luminosityBlock"])
-        if not (lumimask is None):
-           #keep events passing golden JSON
-           mask_lumi_golden_json = lumimask[dataset_era](runs, lumis)
-           lumi_eff = mask_lumi_golden_json.sum()/len(mask_lumi_golden_json)
-           if not (lumi_eff > 0.5):
-               print("WARNING, data file had low lumi efficiency", lumi_eff)  
-           mask_events = mask_events & NUMPY_LIB.array(mask_lumi_golden_json) 
-           #get integrated luminosity in this file
-           if not (lumidata is None):
-               int_lumi = get_int_lumi(runs, lumis, mask_lumi_golden_json, lumidata[dataset_era])
+    int_lumi = compute_integrated_luminosity(scalars, lumimask, lumidata, dataset_era, mask_events, is_mc)
     check_and_fix_qgl(jets)
 
     #output histograms 
     hists = {}
 
-    #temporary hack
+    #temporary hack for JaggedStruct.select_objects (relies on backend)
     muons.hepaccelerate_backend = ha
     jets.hepaccelerate_backend = ha
 
     #associate the muon genpt to reco muons based on the NanoAOD index
-    genJet = None
-    genpart = None
-    if is_mc:
-        genJet = data["GenJet"]
-        genpart = data["GenPart"]
-        muons_genpt = NUMPY_LIB.zeros(muons.numobjects(), dtype=NUMPY_LIB.float32)
-        jets_genpt = NUMPY_LIB.zeros(jets.numobjects(), dtype=NUMPY_LIB.float32)
-        jets_genmass = NUMPY_LIB.zeros(jets.numobjects(), dtype=NUMPY_LIB.float32)
-        if not use_cuda:
-            get_genpt_cpu(muons.offsets, muons.genPartIdx, genpart.offsets, genpart.pt, muons_genpt)
-            get_genpt_cpu(jets.offsets, jets.genJetIdx, genJet.offsets, genJet.pt, jets_genpt)
-            get_genpt_cpu(jets.offsets, jets.genJetIdx, genJet.offsets, genJet.mass, jets_genmass)
-        else:
-            get_genpt_cuda[32,1024](muons.offsets, muons.genPartIdx, genpart.offsets, genpart.pt, muons_genpt)
-            get_genpt_cuda[32,1024](jets.offsets, jets.genJetIdx, genJet.offsets, genJet.pt, jets_genpt)
-            get_genpt_cuda[32,1024](jets.offsets, jets.genJetIdx, genJet.offsets, genJet.mass, jets_genmass)
-        muons.attrs_data["genpt"] = muons_genpt
-        jets.attrs_data["genpt"] = jets_genpt
-        jets.attrs_data["genmass"] = jets_genmass
+    genJet, genpart = get_genparticles(data, muons, jets, is_mc, use_cuda)
 
     #assign a numerical flag to each data event that corresponds to the data era
-    if not is_mc:
-        scalars["run_index"] = NUMPY_LIB.zeros_like(scalars["run"])
-        scalars["run_index"][:] = -1
-        runranges_list = data_runs[dataset_era]
-        for run_start, run_end, run_name in runranges_list:
-            msk = (scalars["run"] >= run_start) & (scalars["run"] <= run_end)
-            scalars["run_index"][msk] = runmap_numerical[run_name]
-        assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
-
-    # scalars["run"] = NUMPY_LIB.array(scalars["run"], dtype=NUMPY_LIB.uint32)
-    # scalars["luminosityBlock"] = NUMPY_LIB.array(scalars["run"], dtype=NUMPY_LIB.uint32)
+    assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical)
 
     #Get the mask of events that pass trigger selection
     mask_events = select_events_trigger(scalars, parameters, mask_events, parameters["hlt_bits"][dataset_era])
@@ -135,30 +102,7 @@ def analyze_data(
     #Compute event weights
     weights = {}
     weights["nominal"] = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.float32)
-
-    if is_mc:
-        weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
-        if debug:
-            print("mean genWeight=", scalars["genWeight"].mean())
-            print("sum genWeight=", scalars["genWeight"].sum())
-        pu_weights, pu_weights_up, pu_weights_down = compute_pu_weights(
-            pu_corrections[dataset_era],
-            weights["nominal"],
-            scalars["Pileup_nTrueInt"],
-            scalars["PV_npvsGood"])
-
-        if debug:
-            print("pu_weights", pu_weights.mean(), pu_weights.std())
-            print("pu_weights_up", pu_weights_up.mean(), pu_weights_up.std())
-            print("pu_weights_down", pu_weights_down.mean(), pu_weights_down.std())
-
-        weights["puWeight_off"] = weights["nominal"] 
-        weights["puWeight__up"] = weights["nominal"] * pu_weights_up
-        weights["puWeight__down"] = weights["nominal"] * pu_weights_down
-        weights["nominal"] = weights["nominal"] * pu_weights
-
-    for wn in weights.keys():
-        print("w", wn, weights[wn].mean())
+    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
 
     #Apply Rochester corrections to leading and subleading muon momenta
     if parameters["do_rochester_corrections"]:
@@ -170,7 +114,6 @@ def analyze_data(
             muons)
         if debug:
             print("After applying Rochester corrections muons.pt={0:.2f} +- {1:.2f}".format(muons.pt.mean(), muons.pt.std()))
-
 
     #get the two leading muons after applying all muon selection
     ret_mu = get_selected_muons(
@@ -283,9 +226,10 @@ def analyze_data(
     syst_to_consider = syst_to_consider
     print("entering jec loop with {0}".format(syst_to_consider))
     ret_jet_nominal = None
+
+
     #Now actually call the JEC computation for each scenario
     for uncertainty_name in syst_to_consider:
-
         #This will be the variated pt vector
         #print("computing variated pt for", uncertainty_name)
         var_up_down = jet_systematics.get_variated_pts(uncertainty_name)
@@ -471,6 +415,7 @@ def analyze_data(
                     msk_cat = category == icat
 
                     hb = parameters["dnn_input_histogram_bins"]["dnn_pred"]
+
                     update_histograms_systematic(
                         hists,
                         "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, "dnn_pred"),
@@ -566,6 +511,81 @@ def analyze_data(
  
     return ret
 
+def compute_integrated_luminosity(scalars, lumimask, lumidata, dataset_era, mask_events, is_mc):
+    int_lumi = 0
+    if not is_mc:
+        runs = NUMPY_LIB.asnumpy(scalars["run"])
+        lumis = NUMPY_LIB.asnumpy(scalars["luminosityBlock"])
+        if not (lumimask is None):
+           #keep events passing golden JSON
+           mask_lumi_golden_json = lumimask[dataset_era](runs, lumis)
+           lumi_eff = mask_lumi_golden_json.sum()/len(mask_lumi_golden_json)
+           if not (lumi_eff > 0.5):
+               print("WARNING, data file had low lumi efficiency", lumi_eff)  
+           mask_events = mask_events & NUMPY_LIB.array(mask_lumi_golden_json) 
+           #get integrated luminosity in this file
+           if not (lumidata is None):
+               int_lumi = get_int_lumi(runs, lumis, mask_lumi_golden_json, lumidata[dataset_era])
+    return int_lumi
+
+def get_genparticles(data, muons, jets, is_mc, use_cuda):
+    genJet = None
+    genpart = None
+
+    if is_mc:
+        genJet = data["GenJet"]
+        genpart = data["GenPart"]
+        muons_genpt = NUMPY_LIB.zeros(muons.numobjects(), dtype=NUMPY_LIB.float32)
+        jets_genpt = NUMPY_LIB.zeros(jets.numobjects(), dtype=NUMPY_LIB.float32)
+        jets_genmass = NUMPY_LIB.zeros(jets.numobjects(), dtype=NUMPY_LIB.float32)
+        if not use_cuda:
+            get_genpt_cpu(muons.offsets, muons.genPartIdx, genpart.offsets, genpart.pt, muons_genpt)
+            get_genpt_cpu(jets.offsets, jets.genJetIdx, genJet.offsets, genJet.pt, jets_genpt)
+            get_genpt_cpu(jets.offsets, jets.genJetIdx, genJet.offsets, genJet.mass, jets_genmass)
+        else:
+            get_genpt_cuda[32,1024](muons.offsets, muons.genPartIdx, genpart.offsets, genpart.pt, muons_genpt)
+            get_genpt_cuda[32,1024](jets.offsets, jets.genJetIdx, genJet.offsets, genJet.pt, jets_genpt)
+            get_genpt_cuda[32,1024](jets.offsets, jets.genJetIdx, genJet.offsets, genJet.mass, jets_genmass)
+        muons.attrs_data["genpt"] = muons_genpt
+        jets.attrs_data["genpt"] = jets_genpt
+        jets.attrs_data["genmass"] = jets_genmass
+    return genJet, genpart
+
+def assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical):
+    if not is_mc:
+        scalars["run_index"] = NUMPY_LIB.zeros_like(scalars["run"])
+        scalars["run_index"][:] = -1
+        runranges_list = data_runs[dataset_era]
+        for run_start, run_end, run_name in runranges_list:
+            msk = (scalars["run"] >= run_start) & (scalars["run"] <= run_end)
+            scalars["run_index"][msk] = runmap_numerical[run_name]
+        assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
+
+def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era):
+    if is_mc:
+        weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
+        if debug:
+            print("mean genWeight=", scalars["genWeight"].mean())
+            print("sum genWeight=", scalars["genWeight"].sum())
+        pu_weights, pu_weights_up, pu_weights_down = compute_pu_weights(
+            pu_corrections[dataset_era],
+            weights["nominal"],
+            scalars["Pileup_nTrueInt"],
+            scalars["PV_npvsGood"])
+
+        if debug:
+            print("pu_weights", pu_weights.mean(), pu_weights.std())
+            print("pu_weights_up", pu_weights_up.mean(), pu_weights_up.std())
+            print("pu_weights_down", pu_weights_down.mean(), pu_weights_down.std())
+
+        weights["puWeight_off"] = weights["nominal"] 
+        weights["puWeight__up"] = weights["nominal"] * pu_weights_up
+        weights["puWeight__down"] = weights["nominal"] * pu_weights_down
+        weights["nominal"] = weights["nominal"] * pu_weights
+
+    for wn in weights.keys():
+        print("w", wn, weights[wn].mean())
+
 def vbf_genfilter(ret_jet_nominal, parameters, dataset_name):
     mask_dijet_genmass = (ret_jet_nominal["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
     mask_2gj = ret_jet_nominal["num_good_genjets"]>=2
@@ -660,8 +680,8 @@ def run_analysis(
         input_thread = Thread(target=threaded_batches_feeder, args=(threadk, train_batches_queue, training_set_generator))
         input_thread.start()
 
-    metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
-    metrics_thread.start()
+    # metrics_thread = Thread(target=threaded_metrics, args=(threadk, train_batches_queue))
+    # metrics_thread.start()
 
     rets = []
     num_processed = 0
@@ -717,7 +737,7 @@ def run_analysis(
 
     #clean up threads
     threadk.set_tokill(True)
-    metrics_thread.join() 
+    #metrics_thread.join() 
 
     # #save output
     # ret = sum(rets, Results({}))
