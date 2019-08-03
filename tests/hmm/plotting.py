@@ -592,7 +592,12 @@ if __name__ == "__main__":
     mc_samples_load = list(mc_samples_load)
 
     eras = []
-    data_results = glob.glob(cmdline_args.input + "/results/data_*.pkl")
+    data_results_glob = cmdline_args.input + "/results/data_*.pkl"
+    print("looking for {0}".format(data_results_glob))
+    data_results = glob.glob(data_results_glob)
+    if len(data_results) == 0:
+        raise Exception("Did not find any data_*.pkl files in {0}, please check that this is a valid results directory and that the merge step has been completed".format(data_results_glob))
+
     for dr in data_results:
         dr_filename = os.path.basename(dr)
         dr_filename_noext = dr_filename.split(".")[0]
