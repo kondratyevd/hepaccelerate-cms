@@ -44,6 +44,8 @@ debug_event_ids = []
 #list to collect performance data in
 global_metrics = []
 
+do_all_histograms = False
+
 def fix_inf_nan(data, default=0):
     data[NUMPY_LIB.isinf(data)] = default
     data[NUMPY_LIB.isnan(data)] = default
@@ -76,7 +78,8 @@ def analyze_data(
     electrons = data["Electron"]
     trigobj = data["TrigObj"]
     scalars = data["eventvars"]
-    
+
+    histo_bins = parameters["histo_bins"]
     mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
 
     #Compute integrated luminosity on data sample and apply golden JSON
@@ -142,21 +145,22 @@ def analyze_data(
             use_cuda, dataset_era, NUMPY_LIB, debug)
         weights["leptonsf_off"] = weights["nominal"]
         weights["nominal"] = weights["nominal"] * sf_tot
-    
-    update_histograms_systematic(
-        hists,
-        "hist__dimuon__leading_muon_pt",
-        "nominal", leading_muon["pt"], weights,
-        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32))
-    
-    update_histograms_systematic(
-        hists,
-        "hist__dimuon__subleading_muon_pt",
-        "nominal", subleading_muon["pt"], weights,
-        ret_mu["selected_events"], NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32))
+   
+    if do_all_histograms:
+        update_histograms_systematic(
+            hists,
+            "hist__dimuon__leading_muon_pt",
+            "nominal", leading_muon["pt"], weights,
+            ret_mu["selected_events"], histo_bins["muon_pt"])
+        
+        update_histograms_systematic(
+            hists,
+            "hist__dimuon__subleading_muon_pt",
+            "nominal", subleading_muon["pt"], weights,
+            ret_mu["selected_events"], histo_bins["muon_pt"])
 
-    hists["hist__dimuon__npvs"] = fill_with_weights(
-        scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32))
+    #hists["hist__dimuon__npvs"] = fill_with_weights(
+    #    scalars["PV_npvsGood"], weights, ret_mu["selected_events"], histo_bins["npvs"])
     
     #Just a check to verify that there are exactly 2 muons per event
     if doverify:
@@ -233,10 +237,10 @@ def analyze_data(
         #print("computing variated pt for", uncertainty_name)
         var_up_down = jet_systematics.get_variated_pts(uncertainty_name)
         for jet_syst_name, jet_pt_vec in var_up_down.items():
-            print("variated jec", jet_syst_name[0], jet_syst_name[1], (jet_pt_vec - jets_passing_id.pt).mean())
             # For events where the JEC/JER was variated, fill only the nominal weight
             weights_selected = select_weights(weights, jet_syst_name)
 
+            jet_pt_change = (jet_pt_vec - jets_passing_id.pt).mean()
             # Configure the jet pt vector to the variated one
             # Would need to also do the mass here
             jets_passing_id.pt = jet_pt_vec
@@ -250,7 +254,10 @@ def analyze_data(
                 parameters["jet_btag"][dataset_era],
                 is_mc, use_cuda
             )
-   
+            print("jet analysis syst={0} sdir={1} mean_pt_change={2:.4f} num_passing_jets={3} ".format(
+                jet_syst_name[0], jet_syst_name[1], jet_pt_change, ret_jet["selected_jets"].sum())
+            )
+
             #print("jet selection eff based on ID & pt", ret_jet["selected_jets"].sum() / float(len(ret_jet["selected_jets"])))
 
             #Find the first two genjets in the event that are not matched to gen-leptons
@@ -302,7 +309,7 @@ def analyze_data(
                 hists,
                 "hist__dimuon__dijet_inv_mass",
                 jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                ret_mu["selected_events"], NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32))
+                ret_mu["selected_events"], histo_bins["dijet_inv_mass"])
 
             #compute DNN input variables in 2 muon, >=2jet region
             dnn_presel = (
@@ -314,12 +321,12 @@ def analyze_data(
             if is_mc and dataset_name in parameters["vbf_filter"]:
                 if jet_syst_name[0] == "nominal":
                     hists["validation_hist__dnn_presel__dijet_inv_mass_gen"] = fill_with_weights(
-                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, NUMPY_LIB.linspace(0,1000,41, dtype=NUMPY_LIB.float32))
+                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, histo_bins["dijet_inv_mass"])
                 mask_vbf_filter = vbf_genfilter(ret_jet_nominal, parameters, dataset_name)
                 dnn_presel = dnn_presel & mask_vbf_filter
                 if jet_syst_name[0] == "nominal":
                     hists["validation_hist__dnn_presel_vbffilter__dijet_inv_mass_gen"] = fill_with_weights(
-                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, NUMPY_LIB.linspace(0,1000,41, dtype=NUMPY_LIB.float32))
+                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, histo_bins["dijet_inv_mass"])
 
             #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
             hists_dnn = {}
@@ -384,110 +391,115 @@ def analyze_data(
                 hists,
                 "hist__dnn_presel__inv_mass",
                 jet_syst_name, higgs_inv_mass, weights_selected,
-               dnn_presel, NUMPY_LIB.linspace(70, 150, 41, dtype=NUMPY_LIB.float32))
+               dnn_presel, histo_bins["inv_mass"])
 
             #Save histograms for numerical categories (cat5 only right now) and all mass bins
             for massbin_name, massbin_msk, mass_edges in [
                     ("h_peak", masswindow_h_peak, parameters["masswindow_h_peak"]),
                     ("h_sideband", masswindow_h_sideband, parameters["masswindow_h_region"]),
                     ("z_peak", masswindow_z_peak, parameters["masswindow_z_peak"])]:
-                
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}__inv_mass".format(massbin_name),
-                    jet_syst_name, higgs_inv_mass, weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41, dtype=NUMPY_LIB.float32))
+                _sel0 = dnn_presel & massbin_msk
 
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}__numjet".format(massbin_name),
-                    jet_syst_name, ret_jet["num_jets"], weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
+                if do_all_histograms:
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}__inv_mass".format(massbin_name),
+                        jet_syst_name, higgs_inv_mass, weights_selected,
+                        _sel0, histo_bins["inv_mass"])
 
-                update_histograms_systematic(
-                    hists,
-                    "hist__dimuon_invmass_{0}__dijet_inv_mass".format(massbin_name),
-                    jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                    dnn_presel & massbin_msk, NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32))
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}__numjet".format(massbin_name),
+                        jet_syst_name, ret_jet["num_jets"], weights_selected,
+                        _sel0, histo_bins["numjet"])
+
+                    update_histograms_systematic(
+                        hists,
+                        "hist__dimuon_invmass_{0}__dijet_inv_mass".format(massbin_name),
+                        jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
+                        _sel0, histo_bins["dijet_inv_mass"])
 
                 for icat in [5, ]:
-                    msk_cat = category == icat
-
+                    msk_cat = (category == icat)
+                    _sel1 = (dnn_presel & massbin_msk & msk_cat)[dnn_presel] 
+                    _sel2 = (dnn_presel & massbin_msk & msk_cat)
                     hb = parameters["dnn_input_histogram_bins"]["dnn_pred"]
 
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, "dnn_pred"),
-                        jet_syst_name, dnn_vars["dnn_pred"], weights_dnn,
-                        (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(hb[0], hb[1], hb[2], dtype=NUMPY_LIB.float32))
-                    
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
-                        jet_syst_name, higgs_inv_mass, weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(mass_edges[0], mass_edges[1], 41, dtype=NUMPY_LIB.float32))
+                    if do_all_histograms:
 
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
-                        jet_syst_name, leading_jet["pt"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61, dtype=NUMPY_LIB.float32))
-                    
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
-                        jet_syst_name, subleading_jet["pt"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 300.0, 61, dtype=NUMPY_LIB.float32))
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, "dnn_pred"),
+                            jet_syst_name, dnn_vars["dnn_pred"], weights_dnn,
+                            _sel1 , histo_bins["dnn_pred"])
+                        
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__inv_mass".format(massbin_name, icat),
+                            jet_syst_name, higgs_inv_mass, weights_selected,
+                            _sel2, histo_bins["inv_mass_z_peak"])
 
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__leading_jet_eta".format(massbin_name, icat),
-                        jet_syst_name, leading_jet["eta"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32))
-                    
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_eta".format(massbin_name, icat),
-                        jet_syst_name, subleading_jet["eta"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32))
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__leading_jet_pt".format(massbin_name, icat),
+                            jet_syst_name, leading_jet["pt"], weights_selected,
+                            _sel2, histo_bins["jet_pt"])
+                        
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_pt".format(massbin_name, icat),
+                            jet_syst_name, subleading_jet["pt"], weights_selected,
+                            _sel2, histo_bins["jet_pt"])
 
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__dijet_inv_mass".format(massbin_name, icat),
-                        jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(400, 1000.0, 41, dtype=NUMPY_LIB.float32))
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__leading_jet_eta".format(massbin_name, icat),
+                            jet_syst_name, leading_jet["eta"], weights_selected,
+                            _sel2, histo_bins["jet_eta"])
+                        
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__subleading_jet_eta".format(massbin_name, icat),
+                            jet_syst_name, subleading_jet["eta"], weights_selected,
+                            _sel2, histo_bins["jet_eta"])
 
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__num_soft_jets".format(massbin_name, icat),
-                        jet_syst_name, scalars["SoftActivityJetNjets5"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
-                    
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__num_jets".format(massbin_name, icat),
-                        jet_syst_name, ret_jet["num_jets"], weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32))
-                    
-                    update_histograms_systematic(
-                        hists,
-                        "hist__dimuon_invmass_{0}_cat{1}__pt_balance".format(massbin_name, icat),
-                        jet_syst_name, pt_balance, weights_selected,
-                        dnn_presel & massbin_msk & msk_cat, NUMPY_LIB.linspace(0, 5, 41, dtype=NUMPY_LIB.float32))
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__dijet_inv_mass".format(massbin_name, icat),
+                            jet_syst_name, ret_jet["dijet_inv_mass"], weights_selected,
+                            _sel2, histo_bins["dijet_inv_mass"])
 
-                    #save all DNN input variables
-                    for varname in dnn_vars.keys():
-                        if varname == "dnn_pred":
-                            continue
-                        if varname in parameters["dnn_input_histogram_bins"].keys():
-                            hb = parameters["dnn_input_histogram_bins"][varname]
-                            update_histograms_systematic(
-                                hists,
-                                "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, varname),
-                                jet_syst_name, dnn_vars[varname], weights_dnn,
-                                (dnn_presel & massbin_msk & msk_cat)[dnn_presel], NUMPY_LIB.linspace(hb[0], hb[1], hb[2], dtype=NUMPY_LIB.float32))
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__num_soft_jets".format(massbin_name, icat),
+                            jet_syst_name, scalars["SoftActivityJetNjets5"], weights_selected,
+                            _sel2, histo_bins["numjets"])
+                        
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__num_jets".format(massbin_name, icat),
+                            jet_syst_name, ret_jet["num_jets"], weights_selected,
+                            dnn_presel & massbin_msk & msk_cat, histo_bins["numjets"])
+                        
+                        update_histograms_systematic(
+                            hists,
+                            "hist__dimuon_invmass_{0}_cat{1}__pt_balance".format(massbin_name, icat),
+                            jet_syst_name, pt_balance, weights_selected,
+                            _sel2, histo_bins["pt_balance"])
 
-        #end of isyst loop
+                        #save all DNN input variables
+                        for varname in dnn_vars.keys():
+                            if varname == "dnn_pred":
+                                continue
+                            if varname in parameters["dnn_input_histogram_bins"].keys():
+                                hb = parameters["dnn_input_histogram_bins"][varname]
+                                update_histograms_systematic(
+                                    hists,
+                                    "hist__dimuon_invmass_{0}_cat{1}__{2}".format(massbin_name, icat, varname),
+                                    jet_syst_name, dnn_vars[varname], weights_dnn,
+                                    _sel1, histo_bins[varname])
+        
+         #end of isyst loop
     #end of uncertainty_name loop
 
     # Collect results
@@ -819,10 +831,10 @@ def event_loop(train_batches_queue, use_cuda, **kwargs):
     ret = Results(ret)
     return ret, ds, len(ds), ds.memsize()/1024.0/1024.0
 
-def get_histogram(data, weights, bins):
+def get_histogram(data, weights, bins, mask=None):
     """Given N-unit vectors of data and weights, returns the histogram in bins
     """
-    return Histogram(*ha.histogram_from_vector(data, weights, bins))
+    return Histogram(*ha.histogram_from_vector(data, weights, bins, mask))
 
 def get_selected_muons(
     scalars,
@@ -1123,11 +1135,14 @@ def compute_inv_mass(objects, mask_events, mask_objects):
 
 def fill_with_weights(values, weight_dict, mask, bins):
     ret = {}
+    vals = values
     for wn in weight_dict.keys():
-        ret[wn] = get_histogram(values[mask], weight_dict[wn][mask], bins)
+        weights = weight_dict[wn]
+        ret[wn] = get_histogram(vals, weights, bins, mask)
     return ret
 
 def update_histograms_systematic(hists, hist_name, systematic_name, values, weight_dict, mask, bins):
+
     if hist_name not in hists:
         hists[hist_name] = {}
     ret = fill_with_weights(values, weight_dict, mask, bins)

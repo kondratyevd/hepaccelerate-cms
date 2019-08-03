@@ -367,7 +367,8 @@ def main(args, datasets):
 
     hmumu_utils.NUMPY_LIB, hmumu_utils.ha = choose_backend(args.use_cuda)
     Dataset.numpy_lib = hmumu_utils.NUMPY_LIB
-    
+    NUMPY_LIB = hmumu_utils.NUMPY_LIB 
+
     # All analysis definitions (cut values etc) should go here
     analysis_parameters = {
         "baseline": {
@@ -470,6 +471,25 @@ def main(args, datasets):
             "categorization_trees": {}
         },
     }
+    histo_bins = {
+        "muon_pt": NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32),
+        "npvs": NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32),
+        "dijet_inv_mass": NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32),
+        "inv_mass": NUMPY_LIB.linspace(70, 150, 41, dtype=NUMPY_LIB.float32),
+        "numjet": NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32),
+        "jet_pt": NUMPY_LIB.linspace(0, 300, 101, dtype=NUMPY_LIB.float32),
+        "jet_eta": NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32),
+        "pt_balance": NUMPY_LIB.linspace(0, 5, 41, dtype=NUMPY_LIB.float32),
+        "numjets": NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32)
+    }
+    for hname, bins in analysis_parameters["baseline"]["dnn_input_histogram_bins"].items():
+        histo_bins[hname] = NUMPY_LIB.linspace(bins[0], bins[1], bins[2], dtype=NUMPY_LIB.float32)
+
+    for masswindow in ["z_peak", "h_peak", "h_region"]:
+        mw = analysis_parameters["baseline"]["masswindow_" + masswindow]
+        histo_bins["inv_mass_{0}".format(masswindow)] = NUMPY_LIB.linspace(mw[0], mw[1], 41, dtype=NUMPY_LIB.float32) 
+    analysis_parameters["baseline"]["histo_bins"] = histo_bins
+
     analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
     analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
     analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
