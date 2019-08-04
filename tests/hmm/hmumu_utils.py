@@ -142,7 +142,10 @@ def analyze_data(
             use_cuda, dataset_era, NUMPY_LIB, debug)
         weights["leptonsf_off"] = weights["nominal"]
         weights["nominal"] = weights["nominal"] * sf_tot
-    
+   
+    #Apply other SF and weights
+    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
+ 
     update_histograms_systematic(
         hists,
         "hist__dimuon__leading_muon_pt",
@@ -158,9 +161,6 @@ def analyze_data(
     hists["hist__dimuon__npvs"] = fill_with_weights(
         scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32))
    
-    #Apply weights
-    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
- 
     #Just a check to verify that there are exactly 2 muons per event
     if doverify:
         z = ha.sum_in_offsets(
@@ -563,7 +563,7 @@ def assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical)
             scalars["run_index"][msk] = runmap_numerical[run_name]
         assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
 
-def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, dataset_era):
+def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era):
     if is_mc:
         weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
         if debug:
