@@ -128,9 +128,9 @@ jec_unc = ['AbsoluteFlavMap', 'AbsoluteMPFBias', 'AbsoluteSample', 'AbsoluteScal
 #, 'SubTotalAbsolute', 'SubTotalMC', 'SubTotalPileUp',
 #    'SubTotalPt', 'SubTotalRelative', 'SubTotalScale', 'TimePtEta', 'Total', 'TotalNoFlavor',
 #    'TotalNoFlavorNoTime', 'TotalNoTime']
- 
-uncertainties = jec_unc + ["puWeight"]
-shape_systematics = jec_unc + ["jer", "puWeight"]
+
+uncertainties = jec_unc + ["puWeight", "L1PreFiringWeight"]
+shape_systematics = jec_unc + ["jer", "puWeight", "L1PreFiringWeight"]
 common_scale_uncertainties = {
     "lumi": 1.025,
 }

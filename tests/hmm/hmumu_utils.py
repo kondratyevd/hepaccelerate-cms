@@ -142,7 +142,10 @@ def analyze_data(
             use_cuda, dataset_era, NUMPY_LIB, debug)
         weights["leptonsf_off"] = weights["nominal"]
         weights["nominal"] = weights["nominal"] * sf_tot
-    
+   
+    #Apply other SF and weights
+    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
+ 
     update_histograms_systematic(
         hists,
         "hist__dimuon__leading_muon_pt",
@@ -157,7 +160,7 @@ def analyze_data(
 
     hists["hist__dimuon__npvs"] = fill_with_weights(
         scalars["PV_npvsGood"], weights, ret_mu["selected_events"], NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32))
-    
+   
     #Just a check to verify that there are exactly 2 muons per event
     if doverify:
         z = ha.sum_in_offsets(
@@ -560,7 +563,7 @@ def assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical)
             scalars["run_index"][msk] = runmap_numerical[run_name]
         assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
 
-def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, dataset_era):
+def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era):
     if is_mc:
         weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
         if debug:
@@ -577,10 +580,26 @@ def compute_event_weights(weights, scalars, genweight_scalefactor, pu_correction
             print("pu_weights_up", pu_weights_up.mean(), pu_weights_up.std())
             print("pu_weights_down", pu_weights_down.mean(), pu_weights_down.std())
 
-        weights["puWeight_off"] = weights["nominal"] 
-        weights["puWeight__up"] = weights["nominal"] * pu_weights_up
-        weights["puWeight__down"] = weights["nominal"] * pu_weights_down
-        weights["nominal"] = weights["nominal"] * pu_weights
+        if NUMPY_LIB.logical_or(dataset_era == "2016",dataset_era == "2017"):
+            if debug:
+                print("mean L1PreFiringWeight_Nom=", scalars["L1PreFiringWeight_Nom"].mean())
+                print("mean L1PreFiringWeight_Up=", scalars["L1PreFiringWeight_Up"].mean())
+                print("mean L1PreFiringWeight_Dn=", scalars["L1PreFiringWeight_Dn"].mean())
+            weights["puWeight_off"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"]
+            weights["puWeight__up"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_up
+            weights["puWeight__down"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_down
+            weights["L1PreFiringWeight_off"] = weights["nominal"] * pu_weights
+            weights["L1PreFiringWeight__up"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Up"]
+            weights["L1PreFiringWeight__down"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Dn"]
+            weights["nominal"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Nom"]
+        else:
+            weights["puWeight_off"] = weights["nominal"]
+            weights["puWeight__up"] = weights["nominal"] * pu_weights_up
+            weights["puWeight__down"] = weights["nominal"] * pu_weights_down
+            weights["nominal"] = weights["nominal"] * pu_weights
+            weights["L1PreFiringWeight_off"] = weights["nominal"]
+            weights["L1PreFiringWeight__up"] = weights["nominal"]
+            weights["L1PreFiringWeight__down"] = weights["nominal"]
 
     for wn in weights.keys():
         print("w", wn, weights[wn].mean())
@@ -1752,7 +1771,10 @@ def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_
 
         sf_iso = lepsf_iso.compute(pdgid, mu["pt"], mu["eta"])
         sf_id = lepsf_id.compute(pdgid, mu["pt"], mu["eta"])
-        sf_trig = lepsf_trig.compute(pdgid, mu["pt"], mu["eta"])
+        if dataset_era == "2016":
+            sf_trig = lepsf_trig.compute(pdgid, mu["pt"], NUMPY_LIB.abs(mu["eta"]))
+        else:
+            sf_trig = lepsf_trig.compute(pdgid, mu["pt"], mu["eta"])
         if debug:
             print("sf_iso: ", sf_iso.mean(), "+-", sf_iso.std())
             print("sf_id: ", sf_id.mean(), "+-", sf_id.std())
@@ -2053,6 +2075,12 @@ def create_datastructure(is_mc, dataset_era):
             ("Generator_weight", "float32"),
             ("genWeight", "float32")
         ]
+        if NUMPY_LIB.logical_or(dataset_era == "2016",dataset_era == "2017"):
+            datastructures["EventVariables"] += [
+                ("L1PreFiringWeight_Nom", "float32"),
+                ("L1PreFiringWeight_Dn", "float32"),
+                ("L1PreFiringWeight_Up", "float32")
+            ]
         datastructures["Muon"] += [
             ("Muon_genPartIdx", "int32"),
         ]
