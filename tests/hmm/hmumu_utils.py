@@ -633,25 +633,13 @@ def run_cache(
             
     processed_size_mb = 0
 
-    for job_desc in job_descriptions:
-        filenames_all = job_desc["filenames"]
-        assert(len(filenames_all)>0)
-        dataset_name = job_desc["dataset_name"]
-        dataset_era = job_desc["dataset_era"]
-        is_mc = job_desc["is_mc"]
+    _nev_total, _processed_size_mb = cache_data(
+        job_descriptions,
+        parameters,
+        cmdline_args)
 
-        datastructure = create_datastructure(is_mc, dataset_era)
-
-        #Used for preselection in the cache
-        hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
-
-        _nev_total, _processed_size_mb = cache_data(
-            filenames_all, dataset_name, datastructure,
-            cmdline_args.cache_location, cmdline_args.datapath, is_mc,
-            hlt_bits, cmdline_args.nthreads)
-
-        nev_total += _nev_total
-        processed_size_mb += _processed_size_mb
+    nev_total += _nev_total
+    processed_size_mb += _processed_size_mb
 
     t1 = time.time()
     dt = t1 - t0
@@ -1938,20 +1926,20 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def cache_data(filenames, name, datastructures, cache_location, datapath, is_mc, hlt_bits, nworkers=16):
-    if nworkers == 1:
+def cache_data(job_descriptions, parameters, cmdline_args):
+    if cmdline_args.nthreads == 1:
         tot_ev = 0
         tot_mb = 0
         for result in map(cache_data_multiproc_worker, [
-            (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+            (job_desc, parameters, cmdline_args) for job_desc in job_descriptions]):
             tot_ev += result[0]
             tot_mb += result[1]
     else:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=nworkers) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=cmdline_args.nthreads) as executor:
             tot_ev = 0
             tot_mb = 0
             for result in executor.map(cache_data_multiproc_worker, [
-                (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+                (job_desc, parameters, cmdline_args) for job_desc in job_descriptions]):
                 tot_ev += result[0]
                 tot_mb += result[1]
     return tot_ev, tot_mb
@@ -1988,9 +1976,23 @@ def cache_preselection(ds, hlt_bits):
             ds.eventvars[ifile][evvar_name] = ds.eventvars[ifile][evvar_name][sel]
 
 def cache_data_multiproc_worker(args):
-    name, filename, datastructure, cache_location, datapath, is_mc, hlt_bits = args
+    job_desc, parameters, cmdline_args = args
+
+    print("verifying cache for {0}".format(job_desc))
+    filenames_all = job_desc["filenames"]
+    assert(len(filenames_all)==1)
+    filename = filenames_all[0]
+
+    dataset_name = job_desc["dataset_name"]
+    dataset_era = job_desc["dataset_era"]
+    is_mc = job_desc["is_mc"]
+
+    datastructure = create_datastructure(is_mc, dataset_era)
+
+    #Used for preselection in the cache
+    hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
     t0 = time.time()
-    ds = create_dataset(name, [filename], datastructure, cache_location, datapath, is_mc)
+    ds = create_dataset(dataset_name, filenames_all, datastructure, cmdline_args.cache_location, cmdline_args.datapath, is_mc)
     ds.numpy_lib = np
 
     #Skip loading this file if cache already done

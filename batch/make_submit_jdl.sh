@@ -24,3 +24,4 @@ for f in `cat jobfiles_merged.txt`; do
     echo "Queue" >> submit.jdl
     echo >> submit.jdl
 done
+
