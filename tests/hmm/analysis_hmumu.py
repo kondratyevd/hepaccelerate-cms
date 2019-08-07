@@ -35,6 +35,10 @@ from concurrent.futures import ProcessPoolExecutor, wait, ALL_COMPLETED
 
 from pars import datasets, datasets_sync
 
+chunksize_multiplier = {
+    "data": 2
+}
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis')
     parser.add_argument('--async-data', action='store_true', help='Load data on a separate thread, faster but disable for debugging')
@@ -544,10 +548,11 @@ def main(args, datasets):
         dataset_name, dataset_era, dataset_globpattern, is_mc = dataset
         filenames_all = filenames_cache[dataset_name + "_" + dataset_era]
         filenames_all_full = [args.datapath + "/" + fn for fn in filenames_all]
+        chunksize = args.chunksize * chunksize_multiplier.get(dataset_name, 1)
         print("Saving dataset {0}_{1} with {2} files in {3} files per chunk to jobfiles".format(
-            dataset_name, dataset_era, len(filenames_all_full), args.chunksize))
+            dataset_name, dataset_era, len(filenames_all_full), chunksize))
         jobfile_dataset = create_dataset_jobfiles(dataset_name, dataset_era,
-            filenames_all_full, is_mc, args.chunksize, args.out)
+            filenames_all_full, is_mc, chunksize, args.out)
         jobfile_data += jobfile_dataset
         print("Dataset {0}_{1} consists of {2} chunks".format(
             dataset_name, dataset_era, len(jobfile_dataset)))

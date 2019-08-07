@@ -229,7 +229,33 @@ def analyze_data(
     syst_to_consider = syst_to_consider
     print("entering jec loop with {0}".format(syst_to_consider))
     ret_jet_nominal = None
+    
+    #Find the first two genjets in the event that are not matched to gen-leptons
+    mask_vbf_filter = None
+    if is_mc and (dataset_name in parameters["vbf_filter"]):
+        #find genleptons
+        genpart_pdgid = NUMPY_LIB.abs(genpart.pdgId)
+        genpart_mask = (genpart_pdgid == 11)
+        genpart_mask = NUMPY_LIB.logical_or(genpart_mask, (genpart_pdgid == 13))
+        genpart_mask = NUMPY_LIB.logical_or(genpart_mask, (genpart_pdgid == 15))
 
+        genjets_not_matched_genlepton = ha.mask_deltar_first(
+            genJet, genJet.masks["all"], genpart, genpart_mask, 0.3
+        )
+        out_genjet_mask = NUMPY_LIB.zeros(genJet.numobjects(), dtype=NUMPY_LIB.bool)
+        inds = NUMPY_LIB.zeros_like(mask_events)
+        targets = NUMPY_LIB.ones_like(mask_events)
+        inds[:] = 0
+        ha.set_in_offsets(out_genjet_mask, genJet.offsets, inds, targets, mask_events, genjets_not_matched_genlepton)
+        inds[:] = 1
+        ha.set_in_offsets(out_genjet_mask, genJet.offsets, inds, targets, mask_events, genjets_not_matched_genlepton)
+
+        num_good_genjets = ha.sum_in_offsets(genJet, out_genjet_mask, mask_events, genJet.masks["all"], NUMPY_LIB.int8)
+
+        genjet_inv_mass, _ = compute_inv_mass(genJet, mask_events, out_genjet_mask, use_cuda)
+        genjet_inv_mass[num_good_genjets<2] = 0
+        
+        mask_vbf_filter = vbf_genfilter(genjet_inv_mass, num_good_genjets, parameters, dataset_name)
 
     #Now actually call the JEC computation for each scenario
     for uncertainty_name in syst_to_consider:
@@ -260,32 +286,6 @@ def analyze_data(
 
             #print("jet selection eff based on ID & pt", ret_jet["selected_jets"].sum() / float(len(ret_jet["selected_jets"])))
 
-            #Find the first two genjets in the event that are not matched to gen-leptons
-            if is_mc and jet_syst_name[0] == "nominal":
-                #find genleptons
-                genpart_pdgid = NUMPY_LIB.abs(genpart.pdgId)
-                genpart_mask = (genpart_pdgid == 11)
-                genpart_mask = NUMPY_LIB.logical_or(genpart_mask, (genpart_pdgid == 13))
-                genpart_mask = NUMPY_LIB.logical_or(genpart_mask, (genpart_pdgid == 15))
-
-                genjets_not_matched_genlepton = ha.mask_deltar_first(
-                    genJet, genJet.masks["all"], genpart, genpart_mask, 0.3
-                )
-                out_genjet_mask = NUMPY_LIB.zeros(genJet.numobjects(), dtype=NUMPY_LIB.bool)
-                inds = NUMPY_LIB.zeros_like(mask_events)
-                targets = NUMPY_LIB.ones_like(mask_events)
-                inds[:] = 0
-                ha.set_in_offsets(out_genjet_mask, genJet.offsets, inds, targets, mask_events, genjets_not_matched_genlepton)
-                inds[:] = 1
-                ha.set_in_offsets(out_genjet_mask, genJet.offsets, inds, targets, mask_events, genjets_not_matched_genlepton)
-
-                num_good_genjets = ha.sum_in_offsets(genJet, out_genjet_mask, mask_events, genJet.masks["all"], NUMPY_LIB.int8)
-
-                genjet_inv_mass, _ = compute_inv_mass(genJet, mask_events, out_genjet_mask, use_cuda)
-                genjet_inv_mass[num_good_genjets<2] = 0
-                ret_jet["dijet_inv_mass_gen"] = genjet_inv_mass
-                ret_jet["num_good_genjets"] = num_good_genjets
-                ret_jet_nominal = ret_jet
 
             pt_balance = ret_jet["dijet_pt"] / higgs_pt
 
@@ -310,17 +310,8 @@ def analyze_data(
                 (ret_mu["selected_events"]) & (ret_jet["num_jets"] >= 2) &
                 (leading_jet["pt"] > parameters["jet_pt_leading"][dataset_era])
             )
-
-            #apply VBF filter cut
-            if is_mc and dataset_name in parameters["vbf_filter"]:
-                if jet_syst_name[0] == "nominal":
-                    hists["validation_hist__dnn_presel__dijet_inv_mass_gen"] = fill_with_weights(
-                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, histo_bins["dijet_inv_mass"])
-                mask_vbf_filter = vbf_genfilter(ret_jet_nominal, parameters, dataset_name)
+            if not mask_vbf_filter is None:
                 dnn_presel = dnn_presel & mask_vbf_filter
-                if jet_syst_name[0] == "nominal":
-                    hists["validation_hist__dnn_presel_vbffilter__dijet_inv_mass_gen"] = fill_with_weights(
-                        ret_jet_nominal["dijet_inv_mass_gen"], weights_selected, dnn_presel, histo_bins["dijet_inv_mass"])
 
             #Compute the DNN inputs, the DNN output, fill the DNN input and output variable histograms
             dnn_prediction = None
@@ -583,9 +574,9 @@ def compute_event_weights(weights, scalars, genweight_scalefactor, pu_correction
     for wn in weights.keys():
         print("w", wn, weights[wn].mean())
 
-def vbf_genfilter(ret_jet_nominal, parameters, dataset_name):
-    mask_dijet_genmass = (ret_jet_nominal["dijet_inv_mass_gen"] > parameters["vbf_filter_mjj_cut"])
-    mask_2gj = ret_jet_nominal["num_good_genjets"]>=2
+def vbf_genfilter(genjet_inv_mass, num_good_genjets, parameters, dataset_name):
+    mask_dijet_genmass = (genjet_inv_mass > parameters["vbf_filter_mjj_cut"])
+    mask_2gj = num_good_genjets >= 2
     invert_mask = parameters["vbf_filter"][dataset_name]
     if invert_mask:
         mask_dijet_genmass = NUMPY_LIB.invert(mask_dijet_genmass)
