@@ -106,7 +106,7 @@ def analyze_data(
     weights = {}
     weights["nominal"] = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.float32)
 
-    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, dataset_era, is_mc)
+    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
 
     #Apply Rochester corrections to leading and subleading muon momenta
     if parameters["do_rochester_corrections"]:
@@ -153,15 +153,14 @@ def analyze_data(
         [
             #dnn_vars["dnn_pred"], "dnn_pred", histo_bins["dnn_pred"], 
             (leading_muon["pt"], "leading_muon_pt", histo_bins["muon_pt"]),
+            (subleading_muon["pt"], "subleading_muon_pt", histo_bins["muon_pt"]),
+            (scalars["PV_npvsGood"], "npvs", histo_bins["npvs"]),
         ],
         ret_mu["selected_events"],
         weights,
         use_cuda
     )
 
-    #hists["hist__dimuon__npvs"] = fill_with_weights(
-    #    scalars["PV_npvsGood"], weights, ret_mu["selected_events"], histo_bins["npvs"])
-    
     #Just a check to verify that there are exactly 2 muons per event
     if doverify:
         z = ha.sum_in_offsets(
@@ -542,7 +541,7 @@ def assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical)
             scalars["run_index"][msk] = runmap_numerical[run_name]
         assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
 
-def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, dataset_era, is_mc):
+def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era):
     if is_mc:
         weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
         if debug:
@@ -559,10 +558,26 @@ def compute_event_weights(weights, scalars, genweight_scalefactor, pu_correction
             print("pu_weights_up", pu_weights_up.mean(), pu_weights_up.std())
             print("pu_weights_down", pu_weights_down.mean(), pu_weights_down.std())
 
-        weights["puWeight_off"] = weights["nominal"] 
-        weights["puWeight__up"] = weights["nominal"] * pu_weights_up
-        weights["puWeight__down"] = weights["nominal"] * pu_weights_down
-        weights["nominal"] = weights["nominal"] * pu_weights
+        if NUMPY_LIB.logical_or(dataset_era == "2016",dataset_era == "2017"):
+            if debug:
+                print("mean L1PreFiringWeight_Nom=", scalars["L1PreFiringWeight_Nom"].mean())
+                print("mean L1PreFiringWeight_Up=", scalars["L1PreFiringWeight_Up"].mean())
+                print("mean L1PreFiringWeight_Dn=", scalars["L1PreFiringWeight_Dn"].mean())
+            weights["puWeight_off"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"]
+            weights["puWeight__up"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_up
+            weights["puWeight__down"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_down
+            weights["L1PreFiringWeight_off"] = weights["nominal"] * pu_weights
+            weights["L1PreFiringWeight__up"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Up"]
+            weights["L1PreFiringWeight__down"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Dn"]
+            weights["nominal"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Nom"]
+        else:
+            weights["puWeight_off"] = weights["nominal"]
+            weights["puWeight__up"] = weights["nominal"] * pu_weights_up
+            weights["puWeight__down"] = weights["nominal"] * pu_weights_down
+            weights["nominal"] = weights["nominal"] * pu_weights
+            weights["L1PreFiringWeight_off"] = weights["nominal"]
+            weights["L1PreFiringWeight__up"] = weights["nominal"]
+            weights["L1PreFiringWeight__down"] = weights["nominal"]
 
     for wn in weights.keys():
         print("w", wn, weights[wn].mean())
@@ -596,25 +611,13 @@ def run_cache(
             
     processed_size_mb = 0
 
-    for job_desc in job_descriptions:
-        filenames_all = job_desc["filenames"]
-        assert(len(filenames_all)>0)
-        dataset_name = job_desc["dataset_name"]
-        dataset_era = job_desc["dataset_era"]
-        is_mc = job_desc["is_mc"]
+    _nev_total, _processed_size_mb = cache_data(
+        job_descriptions,
+        parameters,
+        cmdline_args)
 
-        datastructure = create_datastructure(is_mc, dataset_era)
-
-        #Used for preselection in the cache
-        hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
-
-        _nev_total, _processed_size_mb = cache_data(
-            filenames_all, dataset_name, datastructure,
-            cmdline_args.cache_location, cmdline_args.datapath, is_mc,
-            hlt_bits, cmdline_args.nthreads)
-
-        nev_total += _nev_total
-        processed_size_mb += _processed_size_mb
+    nev_total += _nev_total
+    processed_size_mb += _processed_size_mb
 
     t1 = time.time()
     dt = t1 - t0
@@ -1727,7 +1730,10 @@ def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_
 
         sf_iso = lepsf_iso.compute(pdgid, mu["pt"], mu["eta"])
         sf_id = lepsf_id.compute(pdgid, mu["pt"], mu["eta"])
-        sf_trig = lepsf_trig.compute(pdgid, mu["pt"], mu["eta"])
+        if dataset_era == "2016":
+            sf_trig = lepsf_trig.compute(pdgid, mu["pt"], NUMPY_LIB.abs(mu["eta"]))
+        else:
+            sf_trig = lepsf_trig.compute(pdgid, mu["pt"], mu["eta"])
         if debug:
             print("sf_iso: ", sf_iso.mean(), "+-", sf_iso.std())
             print("sf_id: ", sf_id.mean(), "+-", sf_id.std())
@@ -1891,20 +1897,20 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
-def cache_data(filenames, name, datastructures, cache_location, datapath, is_mc, hlt_bits, nworkers=16):
-    if nworkers == 1:
+def cache_data(job_descriptions, parameters, cmdline_args):
+    if cmdline_args.nthreads == 1:
         tot_ev = 0
         tot_mb = 0
         for result in map(cache_data_multiproc_worker, [
-            (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+            (job_desc, parameters, cmdline_args) for job_desc in job_descriptions]):
             tot_ev += result[0]
             tot_mb += result[1]
     else:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=nworkers) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=cmdline_args.nthreads) as executor:
             tot_ev = 0
             tot_mb = 0
             for result in executor.map(cache_data_multiproc_worker, [
-                (name, fn, datastructures, cache_location, datapath, is_mc, hlt_bits) for fn in filenames]):
+                (job_desc, parameters, cmdline_args) for job_desc in job_descriptions]):
                 tot_ev += result[0]
                 tot_mb += result[1]
             print("waiting for completion")
@@ -1942,9 +1948,23 @@ def cache_preselection(ds, hlt_bits):
             ds.eventvars[ifile][evvar_name] = ds.eventvars[ifile][evvar_name][sel]
 
 def cache_data_multiproc_worker(args):
-    name, filename, datastructure, cache_location, datapath, is_mc, hlt_bits = args
+    job_desc, parameters, cmdline_args = args
+
+    print("verifying cache for {0}".format(job_desc))
+    filenames_all = job_desc["filenames"]
+    assert(len(filenames_all)==1)
+    filename = filenames_all[0]
+
+    dataset_name = job_desc["dataset_name"]
+    dataset_era = job_desc["dataset_era"]
+    is_mc = job_desc["is_mc"]
+
+    datastructure = create_datastructure(is_mc, dataset_era)
+
+    #Used for preselection in the cache
+    hlt_bits = parameters["baseline"]["hlt_bits"][dataset_era]
     t0 = time.time()
-    ds = create_dataset(name, [filename], datastructure, cache_location, datapath, is_mc)
+    ds = create_dataset(dataset_name, filenames_all, datastructure, cmdline_args.cache_location, cmdline_args.datapath, is_mc)
     ds.numpy_lib = np
 
     #Skip loading this file if cache already done
@@ -2029,6 +2049,12 @@ def create_datastructure(is_mc, dataset_era):
             ("Generator_weight", "float32"),
             ("genWeight", "float32")
         ]
+        if NUMPY_LIB.logical_or(dataset_era == "2016",dataset_era == "2017"):
+            datastructures["EventVariables"] += [
+                ("L1PreFiringWeight_Nom", "float32"),
+                ("L1PreFiringWeight_Dn", "float32"),
+                ("L1PreFiringWeight_Up", "float32")
+            ]
         datastructures["Muon"] += [
             ("Muon_genPartIdx", "int32"),
         ]
