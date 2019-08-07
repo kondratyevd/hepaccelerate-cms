@@ -9,6 +9,7 @@ import numpy
 import numpy as np
 import sys
 import os
+import math
 
 import numba
 import numba.cuda as cuda
@@ -175,7 +176,7 @@ def analyze_data(
     ret_el = get_selected_electrons(electrons, parameters["extra_electrons_pt"], parameters["extra_electrons_eta"], parameters["extra_electrons_id"])
     
     # Get the invariant mass of the dimuon system and compute mass windows
-    higgs_inv_mass, higgs_pt = compute_inv_mass(muons, ret_mu["selected_events"], ret_mu["selected_muons"])
+    higgs_inv_mass, higgs_pt = compute_inv_mass(muons, ret_mu["selected_events"], ret_mu["selected_muons"], use_cuda)
     higgs_inv_mass[NUMPY_LIB.isnan(higgs_inv_mass)] = -1
     higgs_inv_mass[NUMPY_LIB.isinf(higgs_inv_mass)] = -1
     higgs_inv_mass[higgs_inv_mass==0] = -1
@@ -280,7 +281,7 @@ def analyze_data(
 
                 num_good_genjets = ha.sum_in_offsets(genJet, out_genjet_mask, mask_events, genJet.masks["all"], NUMPY_LIB.int8)
 
-                genjet_inv_mass, _ = compute_inv_mass(genJet, mask_events, out_genjet_mask)
+                genjet_inv_mass, _ = compute_inv_mass(genJet, mask_events, out_genjet_mask, use_cuda)
                 genjet_inv_mass[num_good_genjets<2] = 0
                 ret_jet["dijet_inv_mass_gen"] = genjet_inv_mass
                 ret_jet["num_good_genjets"] = num_good_genjets
@@ -1017,7 +1018,7 @@ def get_selected_jets(
     jets.attrs_data["selected"] = selected_jets
     jets.attrs_data["first_two"] = first_two_jets
 
-    dijet_inv_mass, dijet_pt = compute_inv_mass(jets, mask_events, selected_jets & first_two_jets)
+    dijet_inv_mass, dijet_pt = compute_inv_mass(jets, mask_events, selected_jets & first_two_jets, use_cuda)
     
     selected_jets_btag = selected_jets & (jets.btagDeepB >= jet_btag)
 
@@ -1069,42 +1070,89 @@ def compute_jet_raw_pt(jets):
     raw_pt = jets.pt * (1.0 - jets.rawFactor)
     return raw_pt
 
-def compute_inv_mass(objects, mask_events, mask_objects):
-    """
-    Computes the invariant mass in the selected objects.
-    
-    objects (JaggedStruct)
-    mask_events (array of bool) 
-    mask_objects (array of bool)
-    
-    """
-    if objects.numobjects() != len(mask_objects):
-        raise Exception(
-            "Object mask size {0} did not match number of objects {1}".format(
-                len(mask_objects), objects.numobjects()))
-    if objects.numevents() != len(mask_events):
-        raise Exception(
-            "Event mask size {0} did not match number of events {1}".format(
-                len(mask_events), objects.numevents()))
-
-    pt = NUMPY_LIB.array(objects.pt, dtype=NUMPY_LIB.float32)
-    eta = NUMPY_LIB.array(objects.eta, dtype=NUMPY_LIB.float32)
-    phi = NUMPY_LIB.array(objects.phi, dtype=NUMPY_LIB.float32)
-    mass = NUMPY_LIB.array(objects.mass, dtype=NUMPY_LIB.float32)
-
-    px = pt * NUMPY_LIB.cos(phi)
-    py = pt * NUMPY_LIB.sin(phi)
-    pz = pt * NUMPY_LIB.sinh(eta)
-    e = NUMPY_LIB.sqrt(px**2 + py**2 + pz**2 + mass**2)
-
-    px_total = ha.sum_in_offsets(objects, px, mask_events, mask_objects)
-    py_total = ha.sum_in_offsets(objects, py, mask_events, mask_objects)
-    pz_total = ha.sum_in_offsets(objects, pz, mask_events, mask_objects)
-    e_total = ha.sum_in_offsets(objects, e, mask_events, mask_objects)
-    
-    inv_mass = NUMPY_LIB.sqrt(-(px_total**2 + py_total**2 + pz_total**2 - e_total**2))
-    pt_total = NUMPY_LIB.sqrt(px_total**2 + py_total**2)
+def compute_inv_mass(objects, mask_events, mask_objects, use_cuda):
+    inv_mass = NUMPY_LIB.zeros(len(mask_events), dtype=np.float32)
+    pt_total = NUMPY_LIB.zeros(len(mask_events), dtype=np.float32)
+    if use_cuda:
+        compute_inv_mass_cudakernel[32, 1024](
+            objects.offsets, objects.pt, objects.eta, objects.phi, objects.mass,
+            mask_events, mask_objects, inv_mass, pt_total)
+        cuda.synchronize()
+    else:
+        compute_inv_mass_kernel(objects.offsets,
+            objects.pt, objects.eta, objects.phi, objects.mass,
+            mask_events, mask_objects, inv_mass, pt_total)
     return inv_mass, pt_total
+
+@numba.njit(parallel=True, fastmath=True)
+def compute_inv_mass_kernel(offsets, pts, etas, phis, masses, mask_events, mask_objects, out_inv_mass, out_pt_total):
+    for iev in numba.prange(offsets.shape[0]-1):
+        if mask_events[iev]:
+            start = np.uint64(offsets[iev])
+            end = np.uint64(offsets[iev + 1])
+            
+            px_total = np.float32(0.0)
+            py_total = np.float32(0.0)
+            pz_total = np.float32(0.0)
+            e_total = np.float32(0.0)
+            
+            for iobj in range(start, end):
+                if mask_objects[iobj]:
+                    pt = pts[iobj]
+                    eta = etas[iobj]
+                    phi = phis[iobj]
+                    mass = masses[iobj]
+
+                    px = pt * np.cos(phi)
+                    py = pt * np.sin(phi)
+                    pz = pt * np.sinh(eta)
+                    e = np.sqrt(px**2 + py**2 + pz**2 + mass**2)
+                    
+                    px_total += px 
+                    py_total += py 
+                    pz_total += pz 
+                    e_total += e
+
+            inv_mass = np.sqrt(-(px_total**2 + py_total**2 + pz_total**2 - e_total**2))
+            pt_total = np.sqrt(px_total**2 + py_total**2)
+            out_inv_mass[iev] = inv_mass
+            out_pt_total[iev] = pt_total
+
+@cuda.jit
+def compute_inv_mass_cudakernel(offsets, pts, etas, phis, masses, mask_events, mask_objects, out_inv_mass, out_pt_total):
+    xi = cuda.grid(1)
+    xstride = cuda.gridsize(1)
+    for iev in range(xi, offsets.shape[0]-1, xstride):
+        if mask_events[iev]:
+            start = np.uint64(offsets[iev])
+            end = np.uint64(offsets[iev + 1])
+            
+            px_total = np.float32(0.0)
+            py_total = np.float32(0.0)
+            pz_total = np.float32(0.0)
+            e_total = np.float32(0.0)
+            
+            for iobj in range(start, end):
+                if mask_objects[iobj]:
+                    pt = pts[iobj]
+                    eta = etas[iobj]
+                    phi = phis[iobj]
+                    mass = masses[iobj]
+
+                    px = pt * math.cos(phi)
+                    py = pt * math.sin(phi)
+                    pz = pt * math.sinh(eta)
+                    e = math.sqrt(px**2 + py**2 + pz**2 + mass**2)
+                    
+                    px_total += px 
+                    py_total += py 
+                    pz_total += pz 
+                    e_total += e
+
+            inv_mass = math.sqrt(-(px_total**2 + py_total**2 + pz_total**2 - e_total**2))
+            pt_total = math.sqrt(px_total**2 + py_total**2)
+            out_inv_mass[iev] = inv_mass
+            out_pt_total[iev] = pt_total
 
 def fill_with_weights(values, weight_dict, mask, bins):
     ret = {}
