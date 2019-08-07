@@ -413,7 +413,7 @@ def main(args, datasets):
             "cat5_abs_jj_deta_cut": 2.5,
 
             "masswindow_z_peak": [76, 106],
-            "masswindow_h_region": [110, 150],
+            "masswindow_h_sideband": [110, 150],
             "masswindow_h_peak": [115, 135],
 
             "inv_mass_bins": 41,
@@ -472,27 +472,28 @@ def main(args, datasets):
         },
     }
     histo_bins = {
-        "muon_pt": NUMPY_LIB.linspace(0, 200, 101, dtype=NUMPY_LIB.float32),
-        "npvs": NUMPY_LIB.linspace(0,100,101, dtype=NUMPY_LIB.float32),
-        "dijet_inv_mass": NUMPY_LIB.linspace(0, 1000, 41, dtype=NUMPY_LIB.float32),
-        "inv_mass": NUMPY_LIB.linspace(70, 150, 41, dtype=NUMPY_LIB.float32),
-        "numjet": NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32),
-        "jet_pt": NUMPY_LIB.linspace(0, 300, 101, dtype=NUMPY_LIB.float32),
-        "jet_eta": NUMPY_LIB.linspace(-4.7, 4.7, 41, dtype=NUMPY_LIB.float32),
-        "pt_balance": NUMPY_LIB.linspace(0, 5, 41, dtype=NUMPY_LIB.float32),
-        "numjets": NUMPY_LIB.linspace(0, 10, 11, dtype=NUMPY_LIB.float32)
+        "muon_pt": np.linspace(0, 200, 101, dtype=np.float32),
+        "npvs": np.linspace(0,100,101, dtype=np.float32),
+        "dijet_inv_mass": np.linspace(0, 1000, 41, dtype=np.float32),
+        "inv_mass": np.linspace(70, 150, 41, dtype=np.float32),
+        "numjet": np.linspace(0, 10, 11, dtype=np.float32),
+        "jet_pt": np.linspace(0, 300, 101, dtype=np.float32),
+        "jet_eta": np.linspace(-4.7, 4.7, 41, dtype=np.float32),
+        "pt_balance": np.linspace(0, 5, 41, dtype=np.float32),
+        "numjets": np.linspace(0, 10, 11, dtype=np.float32)
     }
     for hname, bins in analysis_parameters["baseline"]["dnn_input_histogram_bins"].items():
-        histo_bins[hname] = NUMPY_LIB.linspace(bins[0], bins[1], bins[2], dtype=NUMPY_LIB.float32)
+        histo_bins[hname] = np.linspace(bins[0], bins[1], bins[2], dtype=np.float32)
 
-    for masswindow in ["z_peak", "h_peak", "h_region"]:
+    for masswindow in ["z_peak", "h_peak", "h_sideband"]:
         mw = analysis_parameters["baseline"]["masswindow_" + masswindow]
-        histo_bins["inv_mass_{0}".format(masswindow)] = NUMPY_LIB.linspace(mw[0], mw[1], 41, dtype=NUMPY_LIB.float32) 
+        histo_bins["inv_mass_{0}".format(masswindow)] = np.linspace(mw[0], mw[1], 41, dtype=np.float32)
+
     analysis_parameters["baseline"]["histo_bins"] = histo_bins
 
-    analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
-    analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
-    analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
+    # analysis_parameters["jetpt_l30_sl30"] = copy.deepcopy(analysis_parameters["baseline"])
+    # analysis_parameters["jetpt_l30_sl30"]["jet_pt_leading"] = {"2016": 30.0, "2017": 30.0, "2018": 30.0}
+    # analysis_parameters["jetpt_l30_sl30"]["jet_pt_subleading"] = {"2016": 20.0, "2017": 20.0, "2018": 30.0}
 
     #Run baseline analysis
     outpath = "{0}/partial_results".format(args.out)

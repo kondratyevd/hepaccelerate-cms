@@ -719,7 +719,7 @@ if __name__ == "__main__":
                     var, "nominal", weight_xs, int_lumi, outdir, era)]
         rets = list(pool.map(plot_variations, plot_args))
         rets = list(pool.map(create_datacard_combine_wrap, datacard_args))
-        rets = list(pool.map(make_pdf_plot, plot_args))
+        rets = list(map(make_pdf_plot, plot_args))
 
         #for args, retval in zip(datacard_args, rets):
         #    res, hd, mc_samples, analysis, var, weight, weight_xs, int_lumi, outdir, datataking_year = args

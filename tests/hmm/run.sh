@@ -27,7 +27,13 @@ export INPUTDATAPATH=/storage/user/jpata/
 ## Step 1: cache ROOT data (need to repeat only when list of files or branches changes)
 ## This can take a few hours currently for the whole run (using MAXFILES=-1 and NTHREADS=24)
 singularity exec --nv -B /storage $SINGULARITY_IMAGE python3 tests/hmm/analysis_hmumu.py \
-    --action analyze --action merge --maxchunks $MAXCHUNKS \
-    --nthreads $NTHREADS --cache-location $CACHE_PATH \
+    --action cache --maxchunks 5 \
+    --nthreads 10 --cache-location ./mycache \
     --out ./out \
-    --datapath $INPUTDATAPATH --era 2016 --era 2017 --era 2018
+    --datapath $INPUTDATAPATH --era 2018 --dataset ttjets_sl
+
+#singularity exec --nv -B /storage $SINGULARITY_IMAGE python3 tests/hmm/analysis_hmumu.py \
+#    --action analyze --action merge --maxchunks $MAXCHUNKS \
+#    --nthreads $NTHREADS --cache-location $CACHE_PATH \
+#    --out ./out \
+#    --datapath $INPUTDATAPATH --era 2016 --era 2017 --era 2018

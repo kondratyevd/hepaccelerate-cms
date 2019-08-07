@@ -12,4 +12,4 @@ PYTHONPATH=coffea:hepaccelerate:. singularity exec --nv -B /storage -B /nvme2 $S
     --histname hist__dimuon_invmass_h_peak_cat5__pt_balance \
     --histname hist__dimuon_invmass_h_sideband_cat5__dnn_pred \
     --histname hist__dimuon_invmass_h_sideband_cat5__inv_mass \
-    --histname hist__dimuon_invmass_h_sideband_cat5__pt_balance \
+    --histname hist__dimuon_invmass_h_sideband_cat5__pt_balance
