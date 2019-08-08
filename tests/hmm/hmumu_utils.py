@@ -317,8 +317,9 @@ def analyze_data(
             dnn_prediction = None
             dnn_vars, dnn_prediction = compute_fill_dnn(
                parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors,
-               scalars, leading_muon, subleading_muon, leading_jet, subleading_jet,
-               weights_selected)
+               scalars, leading_muon, subleading_muon, leading_jet, subleading_jet
+            )
+            weights_in_dnn_presel = apply_mask(weights_selected, dnn_presel)
            
             #Assing a numerical category ID 
             category =  assign_category(
@@ -404,7 +405,7 @@ def analyze_data(
                                 for varname in dnn_vars.keys() if varname in histo_bins.keys()
                             ],
                             (dnn_presel & massbin_msk & msk_cat)[dnn_presel],
-                            weights_selected,
+                            weights_in_dnn_presel,
                             use_cuda
                         )
         
@@ -437,6 +438,8 @@ def fill_histograms_several(hists, systematic_name, histname_prefix, variables, 
     num_histograms = len(variables)
 
     for array, varname, bins in variables:
+        if len(array) != len(variables[0][0]) or len(array) != len(mask) or len(array) != len(weights["nominal"]):
+            raise Exception("Data array {0} is of incompatible size".format(varname))
         all_arrays += [array]
         all_bins += [bins]
 
@@ -446,8 +449,6 @@ def fill_histograms_several(hists, systematic_name, histname_prefix, variables, 
     nbins = np.array([len(b) for b in all_bins])
     nbins_sum = np.cumsum(nbins)
     nbins_sum = np.insert(nbins_sum, 0, [0])
-
-    weight_array = weights["nominal"]
 
     for weight_name, weight_array in weights.items():
         if use_cuda:
@@ -483,6 +484,13 @@ def fill_histograms_several(hists, systematic_name, histname_prefix, variables, 
             target = {weight_name: target_histogram}
             update_histograms_systematic(hists, hist_name, systematic_name, target)
 
+        ihist = 0
+        for array, varname, bins in variables:
+            out_w, out_w2, bins = ha.histogram_from_vector(array, weight_array, bins, mask)
+            K = np.abs(out_w_separated[ihist] - out_w) / out_w
+            K[np.isnan(K)] = 0
+            ihist += 1
+    
 def compute_integrated_luminosity(scalars, lumimask, lumidata, dataset_era, mask_events, is_mc):
     int_lumi = 0
     if not is_mc:
@@ -1548,7 +1556,7 @@ def select_weights(weights, jet_systematic_scenario):
 # 1. Compute the DNN input variables in a given preselection
 # 2. Evaluate the DNN model
 # 3. Fill histograms with DNN inputs and output
-def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors, scalars, leading_muon, subleading_muon, leading_jet, subleading_jet, weights):
+def compute_fill_dnn(parameters, use_cuda, dnn_presel, dnn_model, dnn_normfactors, scalars, leading_muon, subleading_muon, leading_jet, subleading_jet):
     nev_dnn_presel = NUMPY_LIB.sum(dnn_presel)
 
     #for some reason, on the cuda backend, the sum does not return a simple number

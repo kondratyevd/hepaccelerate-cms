@@ -35,9 +35,7 @@ from concurrent.futures import ProcessPoolExecutor, wait, ALL_COMPLETED
 
 from pars import datasets, datasets_sync
 
-chunksize_multiplier = {
-    "data": 2
-}
+chunksize_multiplier = {}
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Caltech HiggsMuMu analysis')
