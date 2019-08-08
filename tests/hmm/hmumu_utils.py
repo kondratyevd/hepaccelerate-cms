@@ -152,7 +152,6 @@ def analyze_data(
     fill_histograms_several(
         hists, "nominal", "hist__dimuon__",
         [
-            #dnn_vars["dnn_pred"], "dnn_pred", histo_bins["dnn_pred"], 
             (leading_muon["pt"], "leading_muon_pt", histo_bins["muon_pt"]),
             (subleading_muon["pt"], "subleading_muon_pt", histo_bins["muon_pt"]),
             (scalars["PV_npvsGood"], "npvs", histo_bins["npvs"]),
@@ -382,7 +381,6 @@ def analyze_data(
                         fill_histograms_several(
                             hists, jet_syst_name, "hist__dimuon_invmass_{0}_cat{1}__".format(massbin_name, icat),
                             [
-                                #dnn_vars["dnn_pred"], "dnn_pred", histo_bins["dnn_pred"], 
                                 (higgs_inv_mass, "inv_mass", histo_bins["inv_mass_{0}".format(massbin_name)]),
                                 (leading_jet["pt"], "leading_jet_pt", histo_bins["jet_pt"]),
                                 (subleading_jet["pt"], "subleading_jet_pt", histo_bins["jet_pt"]),
@@ -403,6 +401,8 @@ def analyze_data(
                             [
                                 (dnn_vars[varname], varname, histo_bins[varname])
                                 for varname in dnn_vars.keys() if varname in histo_bins.keys()
+                            ] + [
+                                (dnn_vars["dnn_pred"], "dnn_pred2", histo_bins["dnn_pred2"])
                             ],
                             (dnn_presel & massbin_msk & msk_cat)[dnn_presel],
                             weights_in_dnn_presel,
