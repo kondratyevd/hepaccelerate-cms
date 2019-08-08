@@ -77,6 +77,10 @@ categories = {
     }
 }
 
+controlplots_shape = [
+    "inv_mass", "dnn_pred", "pt_balance"
+]
+
 cross_sections = {
     "dy": 2075.14*3, # https://twiki.cern.ch/twiki/bin/viewauth/CMS/SummaryTable1G25ns; Pg 10: https://indico.cern.ch/event/746829/contributions/3138541/attachments/1717905/2772129/Drell-Yan_jets_crosssection.pdf
     "dy_0j": 4620.52, #https://indico.cern.ch/event/673253/contributions/2756806/attachments/1541203/2416962/20171016_VJetsXsecsUpdate_PH-GEN.pdf
@@ -108,9 +112,12 @@ cross_sections = {
 }
 
 signal_samples = ["ggh", "vbf"]
-jec_unc = ['AbsoluteFlavMap', 'AbsoluteMPFBias', 'AbsoluteSample', 'AbsoluteScale',
-    'AbsoluteStat', 'CorrelationGroupFlavor', 'CorrelationGroupIntercalibration',
-    'CorrelationGroupMPFInSitu', 'CorrelationGroupUncorrelated', 'CorrelationGroupbJES',
+jec_unc = [
+    'AbsoluteFlavMap', 'AbsoluteMPFBias', 'AbsoluteSample', 'AbsoluteScale',
+    'AbsoluteStat',
+#These can be used as a proxy for all the groups
+    #'CorrelationGroupFlavor', 'CorrelationGroupIntercalibration',
+    #'CorrelationGroupMPFInSitu', 'CorrelationGroupUncorrelated', 'CorrelationGroupbJES',
 
 #These are overlapping, the one closest to our region of interest should be chosen
     #'FlavorPhotonJet', 'FlavorPureBottom', 'FlavorPureCharm', 'FlavorPureGluon',

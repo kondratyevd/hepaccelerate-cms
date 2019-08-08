@@ -9,7 +9,7 @@ import uproot
 import copy
 import multiprocessing
 
-from pars import catnames, varnames, analysis_names, shape_systematics
+from pars import catnames, varnames, analysis_names, shape_systematics, controlplots_shape
 from scipy.stats import wasserstein_distance
 
 import argparse
@@ -716,12 +716,14 @@ if __name__ == "__main__":
                 plot_args += [(
                     histos, hdata, mc_samples, analysis,
                     var, "nominal", weight_xs, int_lumi, outdir, era)]
-                for mc_samp in mc_samples:
-                    for unc in shape_systematics:
-                        plot_args_shape_syst += [(
-                            histos, hdata, mc_samp, analysis,
-                            var, "nominal", weight_xs, int_lumi, outdir, era, unc)]
-        #rets = list(pool.map(plot_variations, plot_args_shape_syst))
+                for var_shape in controlplots_shape:
+                    if var_shape in var: 
+                        for mc_samp in mc_samples:
+                            for unc in shape_systematics:
+                                plot_args_shape_syst += [(
+                                    histos, hdata, mc_samp, analysis,
+                                    var, "nominal", weight_xs, int_lumi, outdir, era, unc)]
+        rets = list(pool.map(plot_variations, plot_args_shape_syst))
         rets = list(pool.map(create_datacard_combine_wrap, datacard_args))
         rets = list(pool.map(make_pdf_plot, plot_args))
 
