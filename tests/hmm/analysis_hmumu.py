@@ -492,7 +492,8 @@ def main(args, datasets):
                 "hmmphics": (-4, 4, 11),
             },
 
-            "categorization_trees": {}
+            "categorization_trees": {},
+            "do_bdt_ucsd": True,
         },
     }
     histo_bins = {

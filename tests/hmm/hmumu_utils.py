@@ -81,7 +81,6 @@ def analyze_data(
     electrons = data["Electron"]
     trigobj = data["TrigObj"]
     scalars = data["eventvars"]
-
     histo_bins = parameters["histo_bins"]
     mask_events = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.bool)
 
@@ -342,16 +341,17 @@ def analyze_data(
                ret_jet["num_jets"],ret_jet["num_jets_btag"],dataset_era
             )
             weights_in_dnn_presel = apply_mask(weights_selected, dnn_presel)
-           
-            if not ((bdt_ucsd is None)):
-                bdt_pred = evaluate_bdt_ucsd(dnn_vars, bdt_ucsd)
-                dnn_vars["bdt_ucsd"] = NUMPY_LIB.array(bdt_pred, dtype=NUMPY_LIB.float32)
-            #if not ((bdt2j_ucsd is None)):
-            #    bdt2j_pred = evaluate_bdt2j_ucsd(dnn_vars, bdt2j_ucsd[dataset_era])
-            #    dnn_vars["bdt2j_ucsd"] = bdt2j_pred
-            #if not ((bdt01j_ucsd is None)):
-            #    bdt01j_pred = evaluate_bdt01j_ucsd(dnn_vars, bdt01j_ucsd[dataset_era])
-            #    dnn_vars["bdt01j_ucsd"] = bdt01j_pred
+          
+            if parameters["do_bdt_ucsd"]: 
+                if not ((bdt_ucsd is None)):
+                    bdt_pred = evaluate_bdt_ucsd(dnn_vars, bdt_ucsd)
+                    dnn_vars["bdt_ucsd"] = NUMPY_LIB.array(bdt_pred, dtype=NUMPY_LIB.float32)
+                #if not ((bdt2j_ucsd is None)):
+                #    bdt2j_pred = evaluate_bdt2j_ucsd(dnn_vars, bdt2j_ucsd[dataset_era])
+                #    dnn_vars["bdt2j_ucsd"] = bdt2j_pred
+                #if not ((bdt01j_ucsd is None)):
+                #    bdt01j_pred = evaluate_bdt01j_ucsd(dnn_vars, bdt01j_ucsd[dataset_era])
+                #    dnn_vars["bdt01j_ucsd"] = bdt01j_pred
 
             #Assing a numerical category ID 
             category =  assign_category(
@@ -1452,10 +1452,26 @@ def rochester_correction_muon_qterm(
 
     return NUMPY_LIB.array(qterm)
 
-@numba.njit(parallel=True, fastmath=True)
-def deltaphi_cpu(obj1, obj2, out_dphi):
-    for iev in numba.prange(len(obj1)):
-        dphi = obj1[iev] - obj2[iev] 
+@numba.njit('float32[:], float32[:], float32[:]', parallel=True, fastmath=True)
+def deltaphi_cpu(phi1, phi2, out_dphi):
+    for iev in numba.prange(len(phi1)):
+        dphi = phi1[iev] - phi2[iev] 
+        if dphi > math.pi:
+            dphi = dphi - 2*math.pi
+            out_dphi[iev] = dphi
+        elif (dphi + math.pi) < 0:
+            dphi = dphi + 2*math.pi
+            out_dphi[iev] = dphi
+        else:
+            out_dphi[iev] = dphi
+
+@cuda.jit
+def deltaphi_cudakernel(phi1, phi2, out_dphi):
+    xi = cuda.grid(1)
+    xstride = cuda.gridsize(1)
+    
+    for iev in range(xi, len(phi1), xstride):
+        dphi = phi1[iev] - phi2[iev] 
         if dphi > math.pi:
             dphi = dphi - 2*math.pi
             out_dphi[iev] = dphi
@@ -1566,10 +1582,14 @@ Given two objects, computes the dr = sqrt(deta^2+dphi^2) between them.
 
     returns: arrays of deta, dphi, dr
 """
-def deltar(obj1, obj2):
+def deltar(obj1, obj2, use_cuda):
     deta = obj1["eta"] - obj2["eta"]
     dphi = NUMPY_LIB.zeros(len(deta), dtype=NUMPY_LIB.float32)
-    deltaphi_cpu(obj1["phi"],obj2["phi"],dphi)
+    if use_cuda:
+        deltaphi_cudakernel[21,1024](obj1["phi"],obj2["phi"],dphi)
+        cuda.synchronize()
+    else:
+        deltaphi_cpu(obj1["phi"],obj2["phi"],dphi)
     dr = NUMPY_LIB.sqrt(deta**2 + dphi**2)
     return deta, dphi, dr 
 
@@ -1608,15 +1628,21 @@ Fills the DNN input variables based on two muons and two jets.
     'Higgs_pt' - dimuon pt
     'Higgs_eta' - dimuon eta
 """
-def dnn_variables(leading_muon, subleading_muon, leading_jet, subleading_jet, nsoft):
+def dnn_variables(leading_muon, subleading_muon, leading_jet, subleading_jet, nsoft, use_cuda):
     #delta eta, phi and R between two muons
-    mm_deta, mm_dphi, mm_dr = deltar(leading_muon, subleading_muon)
+    mm_deta, mm_dphi, mm_dr = deltar(leading_muon, subleading_muon, use_cuda)
     
     #delta eta between jets 
     jj_deta = leading_jet["eta"] - subleading_jet["eta"]
     jj_dphi = leading_jet["phi"] - subleading_jet["phi"]
     jj_dphi_mod = NUMPY_LIB.zeros(len(jj_dphi), dtype=NUMPY_LIB.float32)
-    deltaphi_cpu(leading_jet["phi"],subleading_jet["phi"], jj_dphi_mod)
+
+    if use_cuda:
+        deltaphi_cudakernel[32,1024](leading_jet["phi"],subleading_jet["phi"], jj_dphi_mod)
+        cuda.synchronize()
+    else:
+        deltaphi_cpu(leading_jet["phi"],subleading_jet["phi"], jj_dphi_mod)
+
     #jj_dphi_mod = NUMPY_LIB.mod(jj_dphi + math.pi, math.pi)
     
     #muons in cartesian, create dimuon system 
@@ -1641,7 +1667,7 @@ def dnn_variables(leading_muon, subleading_muon, leading_jet, subleading_jet, ns
     dr_mjs = []
     for mu in [leading_muon, subleading_muon]:
         for jet in [leading_jet, subleading_jet]:
-            _, _, dr_mj = deltar(mu, jet)
+            _, _, dr_mj = deltar(mu, jet, use_cuda)
             dr_mjs += [dr_mj]
     dr_mj = NUMPY_LIB.vstack(dr_mjs)
     dRmin_mj = NUMPY_LIB.min(dr_mj, axis=0) 
@@ -1649,7 +1675,7 @@ def dnn_variables(leading_muon, subleading_muon, leading_jet, subleading_jet, ns
     #compute deltaR between dimuon system and both jets 
     dr_mmjs = []
     for jet in [leading_jet, subleading_jet]:
-        _, _, dr_mmj = deltar(mm_sph, jet)
+        _, _, dr_mmj = deltar(mm_sph, jet, use_cuda)
         dr_mmjs += [dr_mmj]
     dr_mmj = NUMPY_LIB.vstack(dr_mmjs)
     dRmin_mmj = NUMPY_LIB.min(dr_mmj, axis=0) 
@@ -1752,7 +1778,7 @@ def compute_fill_dnn(
     subleading_jet_s = apply_mask(subleading_jet, dnn_presel)
     nsoft = scalars["SoftActivityJetNjets5"][dnn_presel]
 
-    dnn_vars = dnn_variables(leading_muon_s, subleading_muon_s, leading_jet_s, subleading_jet_s, nsoft)
+    dnn_vars = dnn_variables(leading_muon_s, subleading_muon_s, leading_jet_s, subleading_jet_s, nsoft, use_cuda)
     if dataset_era == "2017":
     	dnn_vars["MET_pt"] = scalars["METFixEE2017_pt"][dnn_presel]
     else:
@@ -1777,19 +1803,20 @@ def compute_fill_dnn(
     else:
         dnn_pred = NUMPY_LIB.zeros(nev_dnn_presel, dtype=NUMPY_LIB.float32)
 
-    hmmthetacs, hmmphics = miscvariables.csangles(
-        NUMPY_LIB.asnumpy(leading_muon_s["pt"]),
-        NUMPY_LIB.asnumpy(leading_muon_s["eta"]),
-        NUMPY_LIB.asnumpy(leading_muon_s["phi"]),
-        NUMPY_LIB.asnumpy(leading_muon_s["mass"]),
-        NUMPY_LIB.asnumpy(subleading_muon_s["pt"]),
-        NUMPY_LIB.asnumpy(subleading_muon_s["eta"]),
-        NUMPY_LIB.asnumpy(subleading_muon_s["phi"]),
-        NUMPY_LIB.asnumpy(subleading_muon_s["mass"]),
-        NUMPY_LIB.asnumpy(leading_muon_s["charge"]),
-        )
-    dnn_vars["hmmthetacs"] = NUMPY_LIB.array(hmmthetacs)
-    dnn_vars["hmmphics"] = NUMPY_LIB.array(hmmphics)
+    if parameters["do_bdt_ucsd"]:
+        hmmthetacs, hmmphics = miscvariables.csangles(
+            NUMPY_LIB.asnumpy(leading_muon_s["pt"]),
+            NUMPY_LIB.asnumpy(leading_muon_s["eta"]),
+            NUMPY_LIB.asnumpy(leading_muon_s["phi"]),
+            NUMPY_LIB.asnumpy(leading_muon_s["mass"]),
+            NUMPY_LIB.asnumpy(subleading_muon_s["pt"]),
+            NUMPY_LIB.asnumpy(subleading_muon_s["eta"]),
+            NUMPY_LIB.asnumpy(subleading_muon_s["phi"]),
+            NUMPY_LIB.asnumpy(subleading_muon_s["mass"]),
+            NUMPY_LIB.asnumpy(leading_muon_s["charge"]),
+            )
+        dnn_vars["hmmthetacs"] = NUMPY_LIB.array(hmmthetacs)
+        dnn_vars["hmmphics"] = NUMPY_LIB.array(hmmphics)
     dnn_vars["m1eta"] = NUMPY_LIB.array(leading_muon_s["eta"])
     dnn_vars["m2eta"] = NUMPY_LIB.array(subleading_muon_s["eta"])
     dnn_vars["m1ptOverMass"] = NUMPY_LIB.divide(leading_muon_s["pt"],dnn_vars["Higgs_mass"])
