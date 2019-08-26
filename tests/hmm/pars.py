@@ -205,6 +205,12 @@ cross_sections = {
     "dy_m105_160_vbf_amc": 46.9479*0.0425242, #https://docs.google.com/document/d/1bViX80nXQ_p-W4gI6Fqt9PNQ49B6cP1_FhcKwTZVujo/edit?usp=sharing
     "ggh": 0.010571, #48.61 * 0.0002176; https://twiki.cern.ch/twiki/bin/view/LHCPhysics/CERNHLHE2019
     "vbf": 0.000823,
+    "vbf_powheg_herwig": 0.000823,
+    "vbf_powheg1": 0.000823,
+    "vbf_powheg2": 0.000823,
+    "vbf_amc_herwig": 0.000823,
+    "vbf_amc1": 0.000823,
+    "vbf_amc2": 0.000823,
     "wmh": 0.000116,
     "wph": 0.000183,
     "zh": 0.000192,
@@ -225,8 +231,6 @@ cross_sections = {
     "ttw": 0.2001,
     "ttz": 0.2529,
     "st_t_top": 3.36,
-    "vbf_powheg1": 0.000823,
-    "vbf_powheg2": 0.000823,
     "www": 0.2086,
     "wwz": 0.1651,
     "wzz": 0.05565,
