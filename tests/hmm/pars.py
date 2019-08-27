@@ -356,7 +356,7 @@ varnames = {
     "dEta_jj": "$\Delta \eta(j_1 j_2)$"
     "dEtamm": "$\Delta \eta (\mu \mu)$",
     "dPhimm": "$\Delta \phi(j_1 j_2)",
-    "dRmin_mj": "min $\Delta R (\mu j)$"
+    "dRmin_mj": "min $\Delta R (\mu j)$",
     "dijet_inv_mass": "dijet invariant mass $M_{jj} [GeV]",
     "dnn_pred2": "signal DNN", 
     "eta_mmjj": "$\eta_{\mu\mu j_1 j_2}$",
