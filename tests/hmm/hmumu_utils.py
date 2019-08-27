@@ -33,6 +33,7 @@ from cmsutils.stats import likelihood, sig_q0_asimov, sig_naive
 from pars import runmap_numerical, runmap_numerical_r, data_runs, genweight_scalefactor
 
 #global variables need to be configured here for the hepaccelerate backend and numpy library
+#they will be overwritten later
 ha = None
 NUMPY_LIB = None
 
@@ -104,9 +105,10 @@ def analyze_data(
     #Get the mask of events that pass trigger selection
     mask_events = select_events_trigger(scalars, parameters, mask_events, parameters["hlt_bits"][dataset_era])
 
-    #Compute event weights
-    weights = {}
-    weights["nominal"] = NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.float32)
+    #Event weight dictionary, 2 levels.
+    #systematic name -> syst_dir -> individual weight value (not multiplied up) 
+    weights_individual = {}
+    weights_individual["nominal"] = {"nominal": NUMPY_LIB.ones(muons.numevents(), dtype=NUMPY_LIB.float32)}
 
     #Apply Rochester corrections to leading and subleading muon momenta
     if parameters["do_rochester_corrections"]:
@@ -142,15 +144,21 @@ def analyze_data(
 
     #Compute lepton scale factors
     if parameters["do_lepton_sf"] and is_mc:
-        sf_tot = compute_lepton_sf(leading_muon, subleading_muon,
+        lepton_sf_values = compute_lepton_sf(leading_muon, subleading_muon,
             lepsf_iso[dataset_era], lepsf_id[dataset_era], lepsf_trig[dataset_era],
             use_cuda, dataset_era, NUMPY_LIB, debug)
-        weights["leptonsf_off"] = weights["nominal"]
-        weights["nominal"] = weights["nominal"] * sf_tot
-  
+        weights_individual["trigger"] = {
+            "nominal": lepton_sf_values["total"],
+            "up": lepton_sf_values["trigger__up"], 
+            "down": lepton_sf_values["trigger__down"]
+        }
+ 
     #compute variated weights here to ensure the nominal weight contains all possible other weights  
-    compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
-   
+    compute_event_weights(weights_individual, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era)
+ 
+    #actually multiply all the weights together with the appropriate up/down variations.
+    #creates a 1-level dictionary with weights "nominal", "puweight__up", "puweight__down", ..." 
+    weights_final = finalize_weights(weights_individual)
     fill_histograms_several(
         hists, "nominal", "hist__dimuon__",
         [
@@ -159,7 +167,7 @@ def analyze_data(
             (scalars["PV_npvsGood"], "npvs", histo_bins["npvs"]),
         ],
         ret_mu["selected_events"],
-        weights,
+        weights_final,
         use_cuda
     )
 
@@ -265,7 +273,7 @@ def analyze_data(
         var_up_down = jet_systematics.get_variated_pts(uncertainty_name)
         for jet_syst_name, jet_pt_vec in var_up_down.items():
             # For events where the JEC/JER was variated, fill only the nominal weight
-            weights_selected = select_weights(weights, jet_syst_name)
+            weights_selected = select_weights(weights_final, jet_syst_name)
 
             jet_pt_change = (jet_pt_vec - jets_passing_id.pt).mean()
             # Configure the jet pt vector to the variated one
@@ -565,15 +573,51 @@ def assign_data_run_id(scalars, data_runs, dataset_era, is_mc, runmap_numerical)
             scalars["run_index"][msk] = runmap_numerical[run_name]
         assert(NUMPY_LIB.sum(scalars["run_index"]==-1)==0)
 
+def finalize_weights(weights, all_weight_names=None):
+    if all_weight_names is None:
+        all_weight_names = weights.keys()
+    
+    ret = {}
+    ret["nominal"] = NUMPY_LIB.copy(weights["nominal"]["nominal"])
+
+    #multitply up all the nominal weights
+    for this_syst in all_weight_names:
+        if this_syst == "nominal":
+            continue
+        ret["nominal"] *= weights[this_syst]["nominal"]
+
+    #create the variated weights, where just one weight is variated up or down
+    for this_syst in all_weight_names:
+        if this_syst == "nominal":
+            continue
+        for sdir in ["up", "down"]:
+            #for the particular weight or scenario we are considering, get the variated value
+            wval_this_systematic = weights[this_syst][sdir]
+
+            #for other weights, get the nominal
+            wtot = NUMPY_LIB.copy(weights["nominal"]["nominal"])
+
+            wtot *= wval_this_systematic
+
+            for other_syst in all_weight_names:
+                if other_syst == this_syst or other_syst == "nominal":
+                    continue
+                wtot *= weights[other_syst]["nominal"] 
+            ret["{0}__{1}".format(this_syst, sdir)] = wtot
+    
+    for k in ret.keys():
+        print("weight", k, ret[k].mean())
+    return ret
+
 def compute_event_weights(weights, scalars, genweight_scalefactor, pu_corrections, is_mc, dataset_era):
     if is_mc:
-        weights["nominal"] = weights["nominal"] * scalars["genWeight"] * genweight_scalefactor
+        weights["nominal"]["nominal"] = scalars["genWeight"] * genweight_scalefactor
         if debug:
             print("mean genWeight=", scalars["genWeight"].mean())
             print("sum genWeight=", scalars["genWeight"].sum())
         pu_weights, pu_weights_up, pu_weights_down = compute_pu_weights(
             pu_corrections[dataset_era],
-            weights["nominal"],
+            weights["nominal"]["nominal"],
             scalars["Pileup_nTrueInt"],
             scalars["PV_npvsGood"])
 
@@ -581,30 +625,23 @@ def compute_event_weights(weights, scalars, genweight_scalefactor, pu_correction
             print("pu_weights", pu_weights.mean(), pu_weights.std())
             print("pu_weights_up", pu_weights_up.mean(), pu_weights_up.std())
             print("pu_weights_down", pu_weights_down.mean(), pu_weights_down.std())
-
-        if NUMPY_LIB.logical_or(dataset_era == "2016",dataset_era == "2017"):
+        
+        weights["puWeight"] = {"nominal": pu_weights, "up": pu_weights_up, "down": pu_weights_down}
+        
+        weights["L1PreFiringWeight"] = {
+            "nominal": weights["nominal"]["nominal"],
+            "up": weights["nominal"]["nominal"],
+            "down": weights["nominal"]["nominal"]
+        }
+        if dataset_era == "2016" or dataset_era == "2017":
             if debug:
                 print("mean L1PreFiringWeight_Nom=", scalars["L1PreFiringWeight_Nom"].mean())
                 print("mean L1PreFiringWeight_Up=", scalars["L1PreFiringWeight_Up"].mean())
                 print("mean L1PreFiringWeight_Dn=", scalars["L1PreFiringWeight_Dn"].mean())
-            weights["puWeight_off"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"]
-            weights["puWeight__up"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_up
-            weights["puWeight__down"] = weights["nominal"] * scalars["L1PreFiringWeight_Nom"] * pu_weights_down
-            weights["L1PreFiringWeight_off"] = weights["nominal"] * pu_weights
-            weights["L1PreFiringWeight__up"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Up"]
-            weights["L1PreFiringWeight__down"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Dn"]
-            weights["nominal"] = weights["nominal"] * pu_weights * scalars["L1PreFiringWeight_Nom"]
-        else:
-            weights["puWeight_off"] = weights["nominal"]
-            weights["puWeight__up"] = weights["nominal"] * pu_weights_up
-            weights["puWeight__down"] = weights["nominal"] * pu_weights_down
-            weights["nominal"] = weights["nominal"] * pu_weights
-            weights["L1PreFiringWeight_off"] = weights["nominal"]
-            weights["L1PreFiringWeight__up"] = weights["nominal"]
-            weights["L1PreFiringWeight__down"] = weights["nominal"]
-
-    for wn in weights.keys():
-        print("w", wn, weights[wn].mean())
+            weights["L1PreFiringWeight"] = {
+                "nominal": scalars["L1PreFiringWeight_Nom"],
+                "up": scalars["L1PreFiringWeight_Up"],
+                "down": scalars["L1PreFiringWeight_Dn"]}
 
 def evaluate_bdt_ucsd(dnn_vars, gbr_bdt):
     # BDT var=hmmpt
@@ -1289,8 +1326,8 @@ def fill_with_weights(values, weight_dict, mask, bins):
     ret = {}
     vals = values
     for wn in weight_dict.keys():
-        weights = weight_dict[wn]
-        ret[wn] = get_histogram(vals, weights, bins, mask)
+        _weights = weight_dict[wn]
+        ret[wn] = get_histogram(vals, _weights, bins, mask)
     return ret
 
 def update_histograms_systematic(hists, hist_name, systematic_name, target_histogram):
@@ -2001,7 +2038,11 @@ class JetTransformer:
 def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_trig, use_cuda, dataset_era, NUMPY_LIB, debug):
     sfs = []
 
-    for mu in [leading_muon, subleading_muon]: 
+    sfs_trig_up = []
+    sfs_trig_down = []
+
+    for mu in [leading_muon, subleading_muon]:
+        #lepton SF computed on CPU 
         if use_cuda:
             mu = {k: NUMPY_LIB.asnumpy(v) for k, v in mu.items()}
         pdgid = numpy.array(mu["pdgId"])
@@ -2014,19 +2055,32 @@ def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_
         sf_id = lepsf_id.compute(pdgid, mu["pt"], mu["eta"])
         if dataset_era == "2016":
             sf_trig = lepsf_trig.compute(pdgid, mu["pt"], NUMPY_LIB.abs(mu["eta"]))
+            sf_trig_err = lepsf_trig.compute_error(pdgid, mu["pt"], NUMPY_LIB.abs(mu["eta"]))
         else:
             sf_trig = lepsf_trig.compute(pdgid, mu["pt"], mu["eta"])
+            sf_trig_err = lepsf_trig.compute_error(pdgid, mu["pt"], mu["eta"])
+        sf_trig_up = (1.0 + sf_trig_err)
+        sf_trig_down = (1.0 - sf_trig_err)
         if debug:
             print("sf_iso: ", sf_iso.mean(), "+-", sf_iso.std())
             print("sf_id: ", sf_id.mean(), "+-", sf_id.std())
-            print("sf_trig: ", sf_id.mean(), "+-", sf_trig.std())
+            print("sf_trig: ", sf_trig.mean(), "+-", sf_trig.std())
+            print("sf_trig_err: ", sf_trig_err.mean(), "+-", sf_trig_err.std())
         sfs += [sf_iso, sf_id, sf_trig]
+        sfs_trig_up += [sf_trig_up]
+        sfs_trig_down += [sf_trig_down]
 
     #multiply all weights
     sf_tot = sfs[0]
     for sf in sfs[1:]:
-        sf_tot = sf_tot * sf
-    
+        sf_tot *= sf
+    sf_trig_up = sfs_trig_up[0]
+    for sf in sfs_trig_up[1:]:
+        sf_trig_up *= sf
+    sf_trig_down = sfs_trig_down[0]
+    for sf in sfs_trig_down[1:]:
+        sf_trig_down *= sf
+     
     if debug:
         print("sf_tot: ", sf_tot.mean(), "+-", sf_tot.std())
 
@@ -2034,7 +2088,7 @@ def compute_lepton_sf(leading_muon, subleading_muon, lepsf_iso, lepsf_id, lepsf_
     if use_cuda:
         sf_tot = NUMPY_LIB.array(sf_tot)
 
-    return sf_tot
+    return {"total": sf_tot, "trigger__up": sf_trig_up, "trigger__down": sf_trig_down}
 
 def jaggedstruct_print(struct, idx, attrs):
     of1 = struct.offsets[idx]
