@@ -8,7 +8,7 @@ CMS-specific accelerated analysis code based on the [hepaccelerate](https://gith
 ~~~
 #Installation
 pip3 install --user awkward uproot numba
-git clone https://github.com/jpata/hepaccelerate-cms.git
+git clone https://github.com/kondratyevd/hepaccelerate-cms.git
 cd hepaccelerate-cms
 git submodule init
 git submodule update
