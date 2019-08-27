@@ -345,11 +345,37 @@ catnames = {
     "dimuon": "dimuons",
 }
 
+
 varnames = {
-    "subleadingJet_pt": "subleading jet $p_T$ [GeV]",
-    "subleadingJet_eta": "subleading jet $\eta$",
-    "leadingJet_pt": "leading jet $p_T$ [GeV]",
+    "Higgs_eta": "$\eta_{\mu\mu}$",
+    "Higgs_mass": "$M_{\mu\mu}$",
+    "MET_pt": "MET [GeV]",
+    "M_jj": "dijet invariant mass [GeV]",
+    "M_mmjj": "$M_{\mu\mu j_1 j_2}$",
+    "cthetaCS": "$\cos \theta_{CS}$"
+    "dEta_jj": "$\Delta \eta(j_1 j_2)$"
+    "dEtamm": "$\Delta \eta (\mu \mu)$",
+    "dPhimm": "$\Delta \phi(j_1 j_2)",
+    "dRmin_mj": "min $\Delta R (\mu j)$"
+    "dijet_inv_mass": "dijet invariant mass $M_{jj} [GeV]",
+    "dnn_pred2": "signal DNN", 
+    "eta_mmjj": "$\eta_{\mu\mu j_1 j_2}$",
+    "hmmthetacs": "$\theta_{CS}$",
+    "inv_mass": "$M_{\mu\mu}$",
     "leadingJet_eta": "leading jet $\eta$",
+    "leadingJet_pt": "leading jet $p_T$ [GeV]",
+    "leading_jet_eta": "leading jet $\eta$",
+    "leading_jet_pt": "leading jet $p_T$ [GeV]",
+    "leading_jet_pt": "leading jet $p_T$",
+    "num_jets": "number of jets",
+    "phi_mmjj": "$\phi(\mu\mu,j_1 j_2)$", 
+    "pt_balance": "$p_{T,\mu\mu} / p_{T,jj}$",
+    "pt_jj": "dijet $p_T$ [GeV]",
+    "softJet5": "number of soft EWK jets",
+    "subleadingJet_eta": "subleading jet $\eta$",
+    "subleadingJet_pt": "subleading jet $p_T$ [GeV]",
+    "subleadingJet_qgl": "subleading jet QGL",
+    "subleading_jet_pt": "subleading jet $p_T$ [GeV]",
 }
 
 analysis_names = {
