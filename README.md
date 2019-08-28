@@ -14,6 +14,12 @@ git submodule init
 git submodule update
 
 #Compile the C++ helper code (Rochester corrections and lepton sf, ROOT is needed)
+
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+cd /path/to/cmssw/release/
+cmsenv
+cd -
+
 cd tests/hmm/
 make
 cd ../..
