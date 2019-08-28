@@ -32,7 +32,7 @@ cd ../..
 #Run first step of the framework
 ~~~
 . tests/hmm/run_purdue_step1.sh
-~~
+~~~
 
 <!---
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
