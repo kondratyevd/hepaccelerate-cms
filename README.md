@@ -29,6 +29,12 @@ make
 cd ../..
 ~~~
 
+#Run first step of the framework
+~~~
+. tests/hmm/run_purdue_step1.sh
+~~
+
+<!---
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
 
 A prebuilt singularity image with the GPU libraries is also provided: [link](http://login-1.hep.caltech.edu/~jpata/cupy.simg)
@@ -93,3 +99,4 @@ brilcalc lumi -c /cvmfs/cms.cern.ch/SITECONF/local/JobConfig/site-local-config.x
 
 
 ~~~
+--->
