@@ -7,18 +7,21 @@ CMS-specific accelerated analysis code based on the [hepaccelerate](https://gith
 
 ~~~
 #Installation
-pip3 install --user awkward uproot numba
+pip3 install --user scipy awkward uproot numba cffi lz4 cloudpickle 
+
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+mkdir ~/hepaccelerate/
+cd ~/hepaccelerate/
+cmsrel CMSSW_10_2_9
+cd CMSSW_10_2_9/src
+cmsenv
+
 git clone https://github.com/kondratyevd/hepaccelerate-cms.git
 cd hepaccelerate-cms
 git submodule init
 git submodule update
 
 #Compile the C++ helper code (Rochester corrections and lepton sf, ROOT is needed)
-
-source /cvmfs/cms.cern.ch/cmsset_default.sh
-cd /path/to/cmssw/release/
-cmsenv
-cd -
 
 cd tests/hmm/
 make
