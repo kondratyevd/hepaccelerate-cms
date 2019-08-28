@@ -29,7 +29,8 @@ make
 cd ../..
 ~~~
 
-#Run first step of the framework
+Run first step of the framework
+
 ~~~
 . tests/hmm/run_purdue_step1.sh
 ~~~
