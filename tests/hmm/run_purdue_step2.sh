@@ -31,5 +31,5 @@ python3 tests/hmm/analysis_hmumu.py \
     --maxchunks $MAXCHUNKS \
     --nthreads $NTHREADS --cache-location $CACHE_PATH \
     --out ./out \
-    --datapath $INPUTDATAPATH --era 2016 --era 2017 --era 2018 \
+    --datapath $INPUTDATAPATH --era 2016 #--era 2017 --era 2018 \
 
