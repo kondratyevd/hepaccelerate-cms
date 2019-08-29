@@ -88,7 +88,7 @@ def plot_hist_ratio(hists_mc, hist_data,
             kwargs_step={"label": getattr(h, "label", None), "color": getattr(h, "color", None)}
         )
         
-        b = ax1.bar(midpoints(edges), h.contents, np.diff(edges), hmc_tot, edgecolor=getattr(h, "color", None), facecolor=getattr(h, "color", None))
+        b = ax1.bar(midpoints(edges), h.contents, np.diff(edges), hmc_tot, edgecolor=getattr(h, "color", None), facecolor=getattr(h, "color", None), align='center')
         hmc_tot += h.contents
         hmc_tot2 += h.contents_w2
 
