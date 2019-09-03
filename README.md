@@ -7,18 +7,47 @@ CMS-specific accelerated analysis code based on the [hepaccelerate](https://gith
 
 ~~~
 #Installation
-pip3 install --user awkward uproot numba
-git clone https://github.com/NTrevisani/hepaccelerate-cms.git
+pip3 install --user scipy awkward uproot numba cffi lz4 cloudpickle pyyaml pylzma pandas
+pip3.6 install --user backports.lzma
+
+source /cvmfs/cms.cern.ch/cmsset_default.sh
+mkdir ~/hepaccelerate/
+cd ~/hepaccelerate/
+cmsrel CMSSW_10_2_9
+cd CMSSW_10_2_9/src
+cmsenv
+
+git clone https://github.com/kondratyevd/hepaccelerate-cms.git
 cd hepaccelerate-cms
 git submodule init
 git submodule update
 
 #Compile the C++ helper code (Rochester corrections and lepton sf, ROOT is needed)
+
 cd tests/hmm/
 make
 cd ../..
 ~~~
 
+Run first step of the framework - use hammer.rcac.purdue.edu machine, as it has enough /tmp/ space.
+
+~~~
+. tests/hmm/run_purdue_step1.sh
+~~~
+
+Run second step of the framework - works from any machine where Hadoop storage is mounted.
+
+~~
+. tests/hmm/run_purdue_step1.sh
+~~
+
+Produce plots
+
+~~
+. tests/hmm/plots.sh out/
+~~
+
+<!---
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
 
 A prebuilt singularity image with the GPU libraries is also provided: [link](http://login-1.hep.caltech.edu/~jpata/cupy.simg)
@@ -83,3 +112,4 @@ brilcalc lumi -c /cvmfs/cms.cern.ch/SITECONF/local/JobConfig/site-local-config.x
 
 
 ~~~
+--->

@@ -6,6 +6,7 @@
 #include <vector>
 #include <TH2.h>
 #include <TFile.h>
+#include <cassert>
 
 #include "WeightCalculatorFromHistogram.h"
 

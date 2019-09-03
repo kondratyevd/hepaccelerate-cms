@@ -2245,7 +2245,8 @@ def cache_data_multiproc_worker(args):
 def create_datastructure(is_mc, dataset_era):
     datastructures = {
         "Muon": [
-            ("Muon_pt", "float32"), ("Muon_eta", "float32"),
+            ("Muon_pt", "float32"), ("Muon_ptErr", "float32"),
+            ("Muon_eta", "float32"),
             ("Muon_phi", "float32"), ("Muon_mass", "float32"),
             ("Muon_pdgId", "int32"),
             ("Muon_pfRelIso04_all", "float32"), ("Muon_mediumId", "bool"),
