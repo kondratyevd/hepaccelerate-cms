@@ -37,15 +37,15 @@ Run first step of the framework - use hammer.rcac.purdue.edu machine, as it has 
 
 Run second step of the framework - works from any machine where Hadoop storage is mounted.
 
-~~
-. tests/hmm/run_purdue_step1.sh
-~~
+~~~
+. tests/hmm/run_purdue_step2.sh
+~~~
 
 Produce plots
 
-~~
+~~~
 . tests/hmm/plots.sh out/
-~~
+~~~
 
 <!---
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
