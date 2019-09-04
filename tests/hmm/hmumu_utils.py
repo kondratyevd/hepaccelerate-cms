@@ -132,7 +132,7 @@ def analyze_data(
     print("muon selection eff", ret_mu["selected_muons"].sum() / float(muons.numobjects()))
     
     # Create arrays with just the leading and subleading particle contents for easier management
-    mu_attrs = ["pt", "eta", "phi", "mass", "pdgId", "nTrackerLayers", "charge"]
+    mu_attrs = ["pt", "eta", "phi", "mass", "pdgId", "nTrackerLayers", "charge", "ptErr"]
     if is_mc:
         mu_attrs += ["genpt"]
     leading_muon = muons.select_nth(0, ret_mu["selected_events"], ret_mu["selected_muons"], attributes=mu_attrs)
@@ -185,6 +185,22 @@ def analyze_data(
     higgs_pt[NUMPY_LIB.isnan(higgs_pt)] = -1
     higgs_pt[NUMPY_LIB.isinf(higgs_pt)] = -1
     higgs_pt[higgs_pt==0] = -1
+
+    # Get the event-by-event uncertainty on the invariant mass of the dimuon system
+    higgs_inv_mass_uncertainty = miscvariables.mllErr(
+        NUMPY_LIB.asnumpy(leading_muon["pt"]),
+        NUMPY_LIB.asnumpy(leading_muon["eta"]),
+        NUMPY_LIB.asnumpy(leading_muon["phi"]),
+        NUMPY_LIB.asnumpy(leading_muon["mass"]),
+        NUMPY_LIB.asnumpy(subleading_muon["pt"]),
+        NUMPY_LIB.asnumpy(subleading_muon["eta"]),
+        NUMPY_LIB.asnumpy(subleading_muon["phi"]),
+        NUMPY_LIB.asnumpy(subleading_muon["mass"]),
+        NUMPY_LIB.asnumpy(leading_muon["ptErr"]),
+        NUMPY_LIB.asnumpy(subleading_muon["ptErr"]),
+        )
+
+    higgs_rel_inv_mass_uncertainty = higgs_inv_mass_uncertainty / higgs_inv_mass
 
     masswindow_z_peak = ((higgs_inv_mass >= parameters["masswindow_z_peak"][0]) & (higgs_inv_mass < parameters["masswindow_z_peak"][1]))
     masswindow_h_region = ((higgs_inv_mass >= parameters["masswindow_h_sideband"][0]) & (higgs_inv_mass < parameters["masswindow_h_sideband"][1]))
@@ -302,7 +318,7 @@ def analyze_data(
 
             if do_sync and jet_syst_name[0] == "nominal":
                 sync_printout(ret_mu, muons, scalars,
-                    leading_muon, subleading_muon, higgs_inv_mass,
+                    leading_muon, subleading_muon, higgs_inv_mass, higgs_inv_mass_uncertainty, higgs_rel_inv_mass_uncertainty,
                     n_additional_muons, n_additional_electrons,
                     ret_jet, leading_jet, subleading_jet)
            
@@ -328,6 +344,7 @@ def analyze_data(
                     (scalars["SoftActivityJetNjets5"], "num_soft_jets", histo_bins["numjets"]),
                     (ret_jet["num_jets"], "num_jets" , histo_bins["numjets"]),
                     (pt_balance, "pt_balance", histo_bins["pt_balance"]),
+                    ###(higgs_inv_mass_uncertainty, "higgs_inv_mass_uncertainty", histo_bins["higgs_inv_mass_uncertainty"]),
                 ],
                 dnn_presel, 
                 weights_selected,
@@ -421,6 +438,8 @@ def analyze_data(
                             (scalars["SoftActivityJetNjets5"], "num_soft_jets", histo_bins["numjets"]),
                             (ret_jet["num_jets"], "num_jets" , histo_bins["numjets"]),
                             (pt_balance, "pt_balance", histo_bins["pt_balance"]),
+                            (higgs_inv_mass_uncertainty, "higgs_inv_mass_uncertainty", histo_bins["higgs_inv_mass_uncertainty"]),
+                            (higgs_rel_inv_mass_uncertainty, "higgs_rel_inv_mass_uncertainty", histo_bins["higgs_rel_inv_mass_uncertainty"]),
                         ],
                         (dnn_presel & massbin_msk & msk_cat),
                         weights_selected,
@@ -2245,14 +2264,13 @@ def cache_data_multiproc_worker(args):
 def create_datastructure(is_mc, dataset_era):
     datastructures = {
         "Muon": [
-            ("Muon_pt", "float32"), ("Muon_ptErr", "float32"),
-            ("Muon_eta", "float32"),
+            ("Muon_pt", "float32"), ("Muon_eta", "float32"),
             ("Muon_phi", "float32"), ("Muon_mass", "float32"),
             ("Muon_pdgId", "int32"),
             ("Muon_pfRelIso04_all", "float32"), ("Muon_mediumId", "bool"),
             ("Muon_tightId", "bool"), ("Muon_charge", "int32"),
             ("Muon_isGlobal", "bool"), ("Muon_isTracker", "bool"),
-            ("Muon_nTrackerLayers", "int32"),
+            ("Muon_nTrackerLayers", "int32"), ("Muon_ptErr", "float32"),
         ],
         "Electron": [
             ("Electron_pt", "float32"), ("Electron_eta", "float32"),

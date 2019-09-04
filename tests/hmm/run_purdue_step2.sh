@@ -6,12 +6,14 @@
 export NTHREADS=4
 
 #Set to -1 to run on all files, 1 for debugging/testing
-export MAXCHUNKS=-1
+export MAXCHUNKS=1
 
 #This is where the intermediate analysis files will be saved and loaded from
 #As long as one person produces it, other people can run the analysis on this
 
-export CACHE_PATH=/mnt/hadoop/store/group/local/hmm/cache
+#export CACHE_PATH=/mnt/hadoop/store/group/local/hmm/cache
+#export CACHE_PATH=/tmp/dkondra/cache_new/
+export CACHE_PATH=/tmp/dkondra/cache_2016/
 
 export PYTHONPATH=coffea:hepaccelerate:.
 export NUMBA_THREADING_LAYER=tbb
