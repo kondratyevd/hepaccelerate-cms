@@ -17,6 +17,8 @@ cmsrel CMSSW_10_2_9
 cd CMSSW_10_2_9/src
 cmsenv
 
+git clone https://github.com/cms-analysis/HiggsAnalysis-CombinedLimit.git HiggsAnalysis/CombinedLimit
+
 git clone https://github.com/kondratyevd/hepaccelerate-cms.git
 cd hepaccelerate-cms
 git submodule init
@@ -29,23 +31,23 @@ make
 cd ../..
 ~~~
 
-Run first step of the framework - use hammer.rcac.purdue.edu machine, as it has enough /tmp/ space.
+Run first step of the framework:
 
 ~~~
 . tests/hmm/run_purdue_step1.sh
 ~~~
 
-Run second step of the framework - works from any machine where Hadoop storage is mounted.
+Run second step of the framework:
 
-~~
-. tests/hmm/run_purdue_step1.sh
-~~
+~~~
+. tests/hmm/run_purdue_step2.sh
+~~~
 
-Produce plots
+Produce plots:
 
-~~
+~~~
 . tests/hmm/plots.sh out/
-~~
+~~~
 
 <!---
 Best results can be had if the CMS data is stored locally on a filesystem (few TB needed) and if you have a cache disk on the analysis machine of a few hundred GB.
