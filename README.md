@@ -38,7 +38,7 @@ Run first step of the framework - use hammer.rcac.purdue.edu machine, as it has 
 Run second step of the framework - works from any machine where Hadoop storage is mounted.
 
 ~~~
-. tests/hmm/run_purdue_step1.sh
+. tests/hmm/run_purdue_step2.sh
 ~~~
 
 Produce plots
