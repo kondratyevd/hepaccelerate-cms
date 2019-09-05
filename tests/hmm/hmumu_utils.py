@@ -322,14 +322,6 @@ def analyze_data(
                     n_additional_muons, n_additional_electrons,
                     ret_jet, leading_jet, subleading_jet)
 
-            # #Compute jet scale factors
-            # if parameters["do_jet_sf"] and is_mc:
-            #     sf_jer = compute_lepton_sf(leading_muon, subleading_muon,
-            #                                lepsf_iso[dataset_era], lepsf_id[dataset_era], lepsf_trig[dataset_era],
-            #                                use_cuda, dataset_era, NUMPY_LIB, debug)
-            #     weights["jetsf_off"] = weights["nominal"]
-            #     weights["nominal"] = weights["nominal"] * sf_jer
-
             #compute DNN input variables in 2 muon, >=2jet region
             dnn_presel = (
                 (ret_mu["selected_events"]) & (ret_jet["num_jets"] >= 2) &
