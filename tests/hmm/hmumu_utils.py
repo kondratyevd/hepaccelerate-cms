@@ -321,7 +321,7 @@ def analyze_data(
                     leading_muon, subleading_muon, higgs_inv_mass, higgs_inv_mass_uncertainty, higgs_rel_inv_mass_uncertainty,
                     n_additional_muons, n_additional_electrons,
                     ret_jet, leading_jet, subleading_jet)
-           
+
             #compute DNN input variables in 2 muon, >=2jet region
             dnn_presel = (
                 (ret_mu["selected_events"]) & (ret_jet["num_jets"] >= 2) &
@@ -1894,30 +1894,37 @@ class JetTransformer:
 
         self.corr_jec = NUMPY_LIB.array(self.corr_jec)
         self.pt_jec = NUMPY_LIB.array(self.raw_pt) * self.corr_jec 
+        if self.is_mc:
+            self.jer_smear_n, self.jer_smear_u, self.jer_smear_d, self.jer_sigma_unmatched_n = self.apply_jer()            
+            #self.corr_jer = NUMPY_LIB.array(self.corr_jer)
+            self.pt_jec = NUMPY_LIB.array(self.pt_jec) * self.jer_smear_n
+
 
     def apply_jer(self):
         #This is done only on CPU
             resos = self.jetmet_corrections.jer.getResolution(
-                JetEta=eta, Rho=rho, JetPt=NUMPY_LIB.asnumpy(pt_jec))
-            resosfs = self.jetmet_corrections.jersf.getScaleFactor(JetEta=eta)
+                JetEta=self.eta, Rho=self.rho, JetPt=NUMPY_LIB.asnumpy(self.pt_jec))
+            resosfs = self.jetmet_corrections.jersf.getScaleFactor(JetEta=self.eta)
 
             #The following is done either on CPU or GPU
             resos = NUMPY_LIB.array(resos)
             resosfs = NUMPY_LIB.array(resosfs)
 
-            dpt_jet_genjet = jets.pt - jets.genpt
-            dpt_jet_genjet[jets.genpt == 0] = 0
-            ratio_jet_genjet_pt = dpt_jet_genjet / jets.pt
+            dpt_jet_genjet = self.jets.pt - self.jets.genpt
+            dpt_jet_genjet[self.jets.genpt == 0] = 0
+            ratio_jet_genjet_pt = dpt_jet_genjet / self.jets.pt
 
             msk_no_genjet = ratio_jet_genjet_pt == 0
             msk_poor_reso = resosfs[:, 0] < 1
 
-            dm_jet_genjet = jets.mass - jets.genmass
-            dm_jet_genjet[jets.genmass == 0] = 0
-            ratio_jet_genjet_mass = dm_jet_genjet / jets.mass
+            dm_jet_genjet = self.jets.mass - self.jets.genmass
+            dm_jet_genjet[self.jets.genmass == 0] = 0
+            ratio_jet_genjet_mass = dm_jet_genjet / self.jets.mass
            
             smear_n, smear_u, smear_d, sigma_unmatched_n = get_jer_smearfactors(
-                jets.pt, ratio_jet_genjet_pt, msk_no_genjet, msk_poor_reso, resos, resosfs)
+                self.jets.pt, ratio_jet_genjet_pt, msk_no_genjet, msk_poor_reso, resos, resosfs)
+            return smear_n, smear_u, smear_d, sigma_unmatched_n
+
 
     def apply_jec_mc(self):
         corr = self.jetmet_corrections.jec_mc.getCorrection(

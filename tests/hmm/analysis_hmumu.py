@@ -121,7 +121,7 @@ class JetMetCorrections:
                 '{0}_L3Absolute_AK4PFchs'.format(tag)]
             self.jec_data[run] = FactorizedJetCorrector(**{name: evaluator[name] for name in jec_names_data})
       
-        self.jer = None 
+        self.jer = None
         self.jersf = None 
         if jer_tag: 
             jer_names = ['{0}_PtResolution_AK4PFchs'.format(jer_tag)]
@@ -251,8 +251,8 @@ class AnalysisCorrections:
                         "RunG": "Summer16_07Aug2017GH_V11_DATA",
                         "RunH": "Summer16_07Aug2017GH_V11_DATA",
                     },
-                    #jer_tag="Summer16_25nsV1_MC",
-                    jer_tag=None,
+                    jer_tag="Summer16_25nsV1_MC",
+                    #jer_tag=None,
                     jmr_vals=[1.0, 1.2, 0.8],
                     do_factorized_jec=True),
             },
