@@ -31,22 +31,33 @@ make
 cd ../..
 ~~~
 
-Run first step of the framework:
+Run the framework locally:
 
 ~~~
+# Step 1: cache
 . tests/hmm/run_purdue_step1.sh
-~~~
-
-Run second step of the framework:
-
-~~~
+# Step 2: analyze
 . tests/hmm/run_purdue_step2.sh
-~~~
-
-Produce plots:
-
-~~~
+# Step 3: produce plots and datacards
 . tests/hmm/plots.sh out/
+~~~
+
+## Submit jobs using Condor
+
+Will work only from cms.rcac.purdue.edu, as Condor is not set up at other clusters.
+
+~~~
+cd batch_purdue_condor/
+
+# Set up voms proxy:
+. setup_proxy.sh
+
+# Prepare jobfiles and submission script:
+. make_submit_cache_jdl.sh
+
+# Submit the jobs:
+condor_submit submit_cache.jdl
+
 ~~~
 
 <!---
