@@ -1,0 +1,10 @@
+#!/bin/bash
+#PBS -q cms
+#PBS -l nodes=1:ppn=4 
+#PBS -l walltime=10:00:00
+#PBS -e ./logs/e$PBS_JOBID.txt
+#PBS -o ./logs/o$PBS_JOBID.txt
+#PBS -v SUBMIT_DIR
+
+cd $SUBMIT_DIR/batch_purdue_pbs/
+
