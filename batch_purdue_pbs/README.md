@@ -9,7 +9,7 @@ The first argument is the name of PBS queue ("cms" by default), and the second a
 Full analysis (2016+17+18) contains about 4000 chunks, so by default ~200 jobs will be created.
 
 
-~~
+~~~
 cd batch_purdue_pbs
 
 # Set up VOMS proxy
@@ -22,5 +22,5 @@ cd batch_purdue_pbs
 # Merge results and produce plots
 . post.sh
 
-~~
+~~~
 
