@@ -15,7 +15,7 @@ if __name__ == "__main__":
     #shuffle the files across jobs so they all have about the same runtime
     idx_rand = list(range(len(lines)))
     random.shuffle(idx_rand)
-    lines = [lines[idx] for idx in idx_rand]
+    lines = [sys.argv[2]+"/batch_purdue_pbs/"+sys.argv[3]+"/"+lines[idx]+".json" for idx in idx_rand]
    
     #put PERJOB on each line
     for line in chunks(lines, PERJOB):

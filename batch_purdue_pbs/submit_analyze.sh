@@ -18,21 +18,16 @@ else
 fi
 
 echo "Preparing job chunks"
-# Set 1 chunk per job and let ParaFly make the batches
-python chunk_submits.py 1 > jobfiles_merged.txt
+
+python chunk_submits.py 20 "$SUBMIT_DIR" "$jobfiles_path" > jobfiles_merged.txt
 
 #Split on line, not on space
 IFS=$'\n'
-#rm params_cache.txt
-i=0
+
 for f in `cat jobfiles_merged.txt`; do
-    i=i+1
     rm analyze_.sub
     cat template.sub > analyze_.sub
-    echo "./hmm_analyze.sh $SUBMIT_DIR/batch_purdue_pbs/$jobfiles_path/$f.json" >> analyze_.sub
+    echo "./hmm_analyze.sh $f" >> analyze_.sub
     qsub analyze_.sub
-#    if [ $i > 2 ];
-#    then
-#	break
-#    fi
+
 done
