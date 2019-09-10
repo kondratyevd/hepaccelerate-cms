@@ -1,0 +1,19 @@
+Universe = vanilla
+Executable = hmm_cache.sh
+Log = logs/cache_job.$(Cluster).log
+Output = logs/cache_job.out.$(Cluster).$(Process)
+Error = logs/cache_job.err.$(Cluster).$(Process)
+Requirements=(TARGET.OpSysAndVer=="CentOS7")
++RunAsOwner = True
++InteractiveUser = true
++RequestWalltime = 10*3600
+
+run_as_owner = True
+x509userproxy = $ENV(X509_USER_PROXY)
+RequestDisk = 4
+RequestMemory = 3000
+RequestCpus = 1
+
+Environment = USER=$ENV(USER);CONDORJOBID=$(Process);SUBMIT_DIR=$ENV(SUBMIT_DIR)
+
+Queue 1
