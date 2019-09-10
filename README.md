@@ -42,21 +42,32 @@ Run the framework locally:
 . tests/hmm/plots.sh out/
 ~~~
 
-## Submit jobs using Condor
+How to submit analysis jobs:
+===
+(the scripts for caching stage will be ready soon...)
 
-Will work only from cms.rcac.purdue.edu, as Condor is not set up at other clusters.
+The input and output directories are defined in `hmm_analyze.py`.
+
+The submission script `submit_analyze.sh` can be ran with two arguments, for example `. submit_analyze.sh cms 20`.
+The first argument is the name of PBS queue ("cms" by default), and the second argument is number of chunks per job (20 by default).
+
+Full analysis (2016+17+18) contains about 4000 chunks, so by default ~200 jobs will be created.
+
+
+Run these commands from	Hammer frontend (hammer.rcac.purdue.edu):
 
 ~~~
-cd batch_purdue_condor/
+cd batch_purdue_pbs
 
-# Set up voms proxy:
+# Set up VOMS proxy
 . setup_proxy.sh
 
-# Prepare jobfiles and submission script:
-. make_submit_cache_jdl.sh
+# Submit PBS jobs
+. submit_analyze.sh
+# wait for completion..
 
-# Submit the jobs:
-condor_submit submit_cache.jdl
+# Merge results and produce plots
+. post.sh
 
 ~~~
 
