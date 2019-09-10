@@ -1809,6 +1809,12 @@ def compute_fill_dnn(
         )
     dnn_vars["hmmthetacs"] = NUMPY_LIB.array(hmmthetacs)
     dnn_vars["hmmphics"] = NUMPY_LIB.array(hmmphics)
+
+    dpt1 = NUMPY_LIB.divide((leading_muon_s["ptErr"]*dnn_vars["Higgs_mass"]),(2*leading_muon_s["pt"]))
+    dpt2 = NUMPY_LIB.divide((subleading_muon_s["ptErr"]*dnn_vars["Higgs_mass"]),(2*subleading_muon_s["pt"]))
+    mm_massErr = NUMPY_LIB.sqrt(dpt1*dpt1 +dpt2*dpt2)
+    dnn_vars["massErr_rel"] = NUMPY_LIB.divide(mm_massErr,dnn_vars["Higgs_mass"])
+
     dnn_vars["m1eta"] = NUMPY_LIB.array(leading_muon_s["eta"])
     dnn_vars["m2eta"] = NUMPY_LIB.array(subleading_muon_s["eta"])
     dnn_vars["m1ptOverMass"] = NUMPY_LIB.divide(leading_muon_s["pt"],dnn_vars["Higgs_mass"])

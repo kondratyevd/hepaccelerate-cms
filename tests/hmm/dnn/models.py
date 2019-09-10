@@ -28,7 +28,7 @@ def get_model(name, input_dim, output_dim):
     x = Dropout(0.2)(x)
     x = Dense(25, name = model_50_D2_25_D2_25_D2.name+'_layer_3', activation='relu')(x)
     x = Dropout(0.2)(x)
-    model_50_D2_25_D2_25_D2.outputs = Dense(output_dim, name = model_50_D2_25_D2_25_D2.name+'_output',  activation='softmax')(x)
+    model_50_D2_25_D2_25_D2.outputs = Dense(output_dim, name = model_50_D2_25_D2_25_D2.name+'_output',  activation='sigmoid')(x)
 
     models = {
         "model_50_D2_25_D2_25_D2": model_50_D2_25_D2_25_D2,
