@@ -67,6 +67,8 @@ mkdir logs
 # Submit PBS jobs
 . submit_cache.sh
 # wait for completion..
+
+cp jobfiles.json /path/to/cache/
 ~~~
 
 Stage 2 & 3: analysis, plots and datacards 
