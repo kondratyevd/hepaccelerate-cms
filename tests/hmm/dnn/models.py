@@ -30,8 +30,18 @@ def get_model(name, input_dim, output_dim):
     x = Dropout(0.2)(x)
     model_50_D2_25_D2_25_D2.outputs = Dense(output_dim, name = model_50_D2_25_D2_25_D2.name+'_output',  activation='sigmoid')(x)
 
+    caltech_model = KerasModel('caltech_model', input_dim, 2048, 10, 'binary_crossentropy', 'adam')
+    x = Dense(100, name = caltech_model.name+'_layer_1', activation='tanh')(caltech_model.inputs)
+    x = Dropout(0.2)(x)
+    x = Dense(100, name = caltech_model.name+'_layer_2', activation='tanh')(x)
+    x = Dropout(0.2)(x)
+    x = Dense(100, name = caltech_model.name+'_layer_3', activation='tanh')(x)
+    x = Dropout(0.2)(x)
+    caltech_model.outputs = Dense(output_dim, name = caltech_model.name+'_output',  activation='sigmoid')(x)
+
     models = {
         "model_50_D2_25_D2_25_D2": model_50_D2_25_D2_25_D2,
+        "caltech_model": caltech_model,
     }
     
     return models[name]

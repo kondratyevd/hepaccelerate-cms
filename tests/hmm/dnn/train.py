@@ -2,8 +2,12 @@ import os,sys
 import numpy as np
 import pandas as pd
 import glob
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import roc_curve
 from keras.utils import to_categorical
 from models import get_model
 
@@ -26,13 +30,16 @@ def filter(df):
     return df
 
 class DNNSetup(object):
-    def __init__(self):
+    def __init__(self, out_dir):
         self.category_labels = {}
         self.categories = []
+        self.trained_models = {}
         self.df = pd.DataFrame()
         self.df_dict = {}
         self.inputs = []
+        self.out_dir = out_dir
         self.model_dir = "tests/hmm/dnn/trained_models/"
+        os.system("mkdir -p "+self.out_dir)
         os.system("mkdir -p "+self.model_dir)
 
     def load_as_category(self, path, ds, cat_index):
@@ -64,7 +71,7 @@ class DNNSetup(object):
 
 
 
-    def train_model(self, model_name, binary):
+    def train_model(self, model_name, binary=True, plot_history=True):
         if self.inputs:
             input_dim = len(self.inputs)
         else:
@@ -95,13 +102,41 @@ class DNNSetup(object):
                                     shuffle=True)
         
         model.model.save(self.model_dir+model.name+'_trained.h5')
+        self.trained_models[model_name] = model
 
-dnn_setup = DNNSetup()
+        if plot_history:
+            plt.clf()
+            plt.plot(history.history['loss'])
+            plt.plot(history.history['val_loss'])
+            plt.title('Model loss')
+            plt.ylabel('Loss')
+            plt.xlabel('Epoch')
+            plt.legend(['Train', 'Test'], loc='upper left')
+            plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
+
+    def plot_rocs(self, out_name):
+        roc_parameters = {} # [0]: fpr, [1]: tpr, [2]: threshold
+        for model_name, model in self.trained_models.items():
+            predictions = model.model.predict(self.x_test).ravel()
+            roc_parameters[model_name] = roc_curve(self.y_test, predictions)
+        
+        plt.clf()
+        plt.plot([0, 1], [0, 1], 'k--')
+        for model_name, roc in roc_parameters.items():
+            plt.plot(roc[0], roc[1], label=model_name)
+        plt.xlabel('False positive rate')
+        plt.ylabel('True positive rate')
+        plt.title('Test ROC curves')
+        plt.legend(loc='best')
+        plt.savefig("{0}/{1}".format(self.out_dir, out_name))
+        print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
+
+dnn_setup = DNNSetup(out_dir = "tests/hmm/dnn/performance/")
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
 #            "ggh_*", 
-            "vbf_0", 
-            "vbf_1",
+            "vbf_*", 
+#            "vbf_1",
             ]
 bkg_list = [
             "dy_[0-9]",
@@ -128,3 +163,5 @@ print("Training data loaded:")
 print(dnn_setup.x_train)
 
 dnn_setup.train_model("model_50_D2_25_D2_25_D2")
+dnn_setup.train_model("caltech_model")
+dnn_setup.plot_rocs("roc_test.png")
