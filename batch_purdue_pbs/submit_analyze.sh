@@ -14,7 +14,7 @@ jobfiles_path="jobfiles"
 
 echo "Preparing job chunks"
 
-python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" > jobfiles_merged.txt
+python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" "jobfiles.txt"> jobfiles_merged.txt
 
 #Split on line, not on space
 IFS=$'\n'

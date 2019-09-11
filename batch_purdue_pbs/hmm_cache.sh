@@ -12,7 +12,7 @@ export OMP_NUM_THREADS=$NTHREADS
 export MAXCHUNKS=-1
 
 #This is where the skim files are loaded form
-export CACHE_PATH=/depot/cms/hmm/cache_test/
+export CACHE_PATH=/depot/cms/hmm/cache/
 
 #Local output director in worker node tmp
 export OUTDIR=/depot/cms/hmm/out_$USER/
