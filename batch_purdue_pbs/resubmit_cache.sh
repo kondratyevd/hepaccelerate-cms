@@ -8,13 +8,13 @@ echo "Will create submit files based on directory SUBMIT_DIR="$SUBMIT_DIR
 
 rm -Rf to_resubmit/*
 echo "Preparing jobfiles"
-python3 prepare_jobfiles.py --to_resubmit
+python3 find_failed.py --to_resubmit
 jobfiles_path="to_resubmit/jobfiles"
 \ls -1 to_resubmit/jobfiles/*.json | sed "s/to_resubmit\/jobfiles\///" | sed "s/\.json$//" > re_jobfiles.txt
 
 echo "Preparing job chunks"
 
-python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" > re_jobfiles_merged.txt
+python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" "re_jobfiles.txt"> re_jobfiles_merged.txt
 
 #Split on line, not on space
 IFS=$'\n'
