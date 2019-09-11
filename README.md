@@ -79,7 +79,9 @@ python3 find_failed.py
 . resubmit_cache.sh
 ~~~
 *Hint:* depending on how many chunks are missing from the output, you may want to set different number of chunks per job for resubmission for faster processing (default is 20). 
-For example, if 200 chunks are missing, you can run `. resubmit_jobs.sh cms 1` to submit 200 small jobs (instead of 10 bigger jobs submitted by default). 
+For example, if 200 chunks are missing, you can run   
+`. resubmit_cache.sh cms 1`    
+to submit 200 small jobs (instead of 10 bigger jobs submitted by default). 
 
 Repeat resubmision as many times as needed, and wait for all jobs to finish...
 
