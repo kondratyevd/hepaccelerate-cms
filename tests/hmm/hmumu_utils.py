@@ -1836,9 +1836,9 @@ def get_jer_smearfactors(pt_or_m, ratio_jet_genjet, msk_no_genjet, msk_poor_reso
     zeros = NUMPY_LIB.ones_like(sigma_unmatched_n)
     rand = NUMPY_LIB.random.normal(loc=zeros, scale=resos, size=len(zeros))
     
-    smear_rnd_n = 1. + rand * NUMPY_LIB.sqrt(resosfs[:, 0]**2 - 1.)
-    smear_rnd_u = 1. + rand * NUMPY_LIB.sqrt(resosfs[:, 1]**2 - 1.)
-    smear_rnd_d = 1. + rand * NUMPY_LIB.sqrt(resosfs[:, 2]**2 - 1.)
+    smear_rnd_n = 1. + rand * NUMPY_LIB.sqrt(NUMPY_LIB.abs(resosfs[:, 0]**2 - 1.))
+    smear_rnd_u = 1. + rand * NUMPY_LIB.sqrt(NUMPY_LIB.abs(resosfs[:, 1]**2 - 1.))
+    smear_rnd_d = 1. + rand * NUMPY_LIB.sqrt(NUMPY_LIB.abs(resosfs[:, 2]**2 - 1.))
 
     inds_no_genjet = NUMPY_LIB.nonzero(msk_no_genjet)[0]
 
@@ -1858,6 +1858,8 @@ def get_jer_smearfactors(pt_or_m, ratio_jet_genjet, msk_no_genjet, msk_poor_reso
     smear_n[(smear_n * pt_or_m) < 0.01] = 0.01
     smear_u[(smear_u * pt_or_m) < 0.01] = 0.01
     smear_d[(smear_d * pt_or_m) < 0.01] = 0.01
+
+    print (smear_n)
 
     return smear_n, smear_u, smear_d, sigma_unmatched_n
 
@@ -1900,10 +1902,14 @@ class JetTransformer:
 
         self.corr_jec = NUMPY_LIB.array(self.corr_jec)
         self.pt_jec = NUMPY_LIB.array(self.raw_pt) * self.corr_jec 
+
         if self.is_mc:
+            print ("Original jet pt value: " + (str(self.pt_jec)))
             self.jer_smear_n, self.jer_smear_u, self.jer_smear_d, self.jer_sigma_unmatched_n = self.apply_jer()            
             #self.corr_jer = NUMPY_LIB.array(self.corr_jer)
-            self.pt_jec = NUMPY_LIB.array(self.pt_jec) * self.jer_smear_n
+            self.pt_jec = NUMPY_LIB.array(self.pt_jec) * (self.msk_no_genjet*self.jer_sigma_unmatched_n + (1. - self.msk_no_genjet)*self.jer_smear_n)
+            print ("Jet smearing: " + (str(self.jer_smear_n)))
+            print ("New jet pt value: " + (str(self.pt_jec)))
 
 
     def apply_jer(self):
@@ -1921,6 +1927,7 @@ class JetTransformer:
             ratio_jet_genjet_pt = dpt_jet_genjet / self.jets.pt
 
             msk_no_genjet = ratio_jet_genjet_pt == 0
+            self.msk_no_genjet = msk_no_genjet
             msk_poor_reso = resosfs[:, 0] < 1
 
             dm_jet_genjet = self.jets.mass - self.jets.genmass
@@ -1928,7 +1935,7 @@ class JetTransformer:
             ratio_jet_genjet_mass = dm_jet_genjet / self.jets.mass
            
             smear_n, smear_u, smear_d, sigma_unmatched_n = get_jer_smearfactors(
-                self.jets.pt, ratio_jet_genjet_pt, msk_no_genjet, msk_poor_reso, resos, resosfs)
+                self.jets.pt, ratio_jet_genjet_pt, self.msk_no_genjet, msk_poor_reso, resos, resosfs)
             return smear_n, smear_u, smear_d, sigma_unmatched_n
 
 
