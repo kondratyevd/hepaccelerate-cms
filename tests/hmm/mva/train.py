@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree.export import export_text
 from keras.utils import to_categorical
 from models import get_model
 
@@ -29,11 +31,14 @@ def filter(df):
     df = df[(df['Higgs_mass']>110) & (df['Higgs_mass']<150)]
     return df
 
-class DNNSetup(object):
+class MVASetup(object):
     def __init__(self, out_dir):
         self.category_labels = {}
         self.categories = []
+        self.mva_models = {}
         self.trained_models = {}
+        self.feature_sets = {}
+        self.scalers = {}
         self.df = pd.DataFrame()
         self.df_dict = {}
         self.inputs = []
@@ -41,6 +46,13 @@ class DNNSetup(object):
         self.model_dir = "tests/hmm/dnn/trained_models/"
         os.system("mkdir -p "+self.out_dir)
         os.system("mkdir -p "+self.model_dir)
+
+    def add_feature_set(self, name, option):
+        self.feature_sets[name] = option
+
+    def add_model(self, model_name):
+        print("Adding model: {0}".format(model_name))
+        self.mva_models[model_name] = get_model(model_name)
 
     def load_as_category(self, path, ds, cat_index):
         # categories should be enumerated from 0 to num.cat. - 1
@@ -54,24 +66,28 @@ class DNNSetup(object):
         new_df["cat_index"] = cat_index
         self.df_dict[cat_index] = pd.concat((self.df_dict[cat_index], new_df))
 
-    def prepare_data(self, inputs):
-        self.inputs = inputs
-        self.df = pd.concat(self.df_dict.values())
-        self.df = filter(self.df)
-
-        for i in self.inputs:
+    def prepare_data(self, label, inputs):
+        for i in inputs:
             if i not in self.df.columns:
-                print("Variable {0} not in columns!".format(i))
+                print("Feature set {0}: variable {1} not in columns!".format(label, i))
                 sys.exit(1)
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df[self.inputs], self.df["cat_index"], test_size=0.25, shuffle=True)
 
-        scaler = StandardScaler().fit(self.x_train.values)
-        self.x_train[self.inputs] = scaler.transform(self.x_train.values)
-        self.x_test[self.inputs] = scaler.transform(self.x_test.values)
+        self.scalers[label] = StandardScaler().fit(self.x_train[inputs].values)
+        training_data = self.scalers[label].transform(self.x_train[inputs].values)
+        return training_data
+#        self.x_test[inputs] = self.scalers[label].transform(self.x_test[inputs].values)
 
+    def train_models(self):
+        self.df = pd.concat(self.df_dict.values())
+        self.df = filter(self.df) 
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='b'], self.df["cat_index"], test_size=0.25, shuffle=True)
+        for feature_set_name, feature_set in self.feature_sets.items():
+            training_data = self.prepare_data(feature_set_name, feature_set)
+            for mva_model in self.mva_models:
+                # mva_model.train_model()
+                pass
 
-
-    def train_model(self, model_name, binary=True, plot_history=True):
+    def train_dnn(self, model_name, binary=True, plot_history=True):
         if self.inputs:
             input_dim = len(self.inputs)
         else:
@@ -114,6 +130,12 @@ class DNNSetup(object):
             plt.legend(['Train', 'Test'], loc='upper left')
             plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
 
+    def train_dt(self):
+        decision_tree = DecisionTreeClassifier(random_state=0, max_depth=2)
+        decision_tree = decision_tree.fit(self.x_train, self.y_train)
+        r = export_text(decision_tree, feature_names=self.inputs)
+        print(r)
+
     def plot_rocs(self, out_name):
         roc_parameters = {} # [0]: fpr, [1]: tpr, [2]: threshold
         for model_name, model in self.trained_models.items():
@@ -131,19 +153,19 @@ class DNNSetup(object):
         plt.savefig("{0}/{1}".format(self.out_dir, out_name))
         print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
 
-dnn_setup = DNNSetup(out_dir = "tests/hmm/dnn/performance/")
+mva_setup = MVASetup(out_dir = "tests/hmm/mva/performance/")
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
 #            "ggh_*", 
-            "vbf_*", 
-#            "vbf_1",
+#            "vbf_*", 
+            "vbf_[0-9]",
             ]
 bkg_list = [
             "dy_[0-9]",
-            "dy_[0-9][0-9]",
+#            "dy_[0-9][0-9]",
 #            "ttjets_dl_*",
             ]
-input_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj',
+caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj',
       'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj',
       'leadingJet_pt', 'subleadingJet_pt',
       'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj',
@@ -151,17 +173,25 @@ input_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj',
       'subleadingJet_qgl', 'cthetaCS', 'softJet5', 'Higgs_pt', 'Higgs_eta',
      'Higgs_mass']
 
-dnn_setup.category_labels = {0: "signal", 1: "background"}
+mva_setup.add_feature_set("caltech_variables",caltech_vars)
+
+mva_setup.category_labels = {0: "signal", 1: "background"}
 
 for s in sig_list:
-    dnn_setup.load_as_category(ds_path,s,0)
+    mva_setup.load_as_category(ds_path,s,0)
 for b in bkg_list:
-    dnn_setup.load_as_category(ds_path,b,1)
+    mva_setup.load_as_category(ds_path,b,1)
 
-dnn_setup.prepare_data(input_vars)
-print("Training data loaded:")
-print(dnn_setup.x_train)
+#mva_setup.prepare_data(input_vars)
+#print("Training data loaded:")
+#print(mva_setup.x_train)
 
-dnn_setup.train_model("model_50_D2_25_D2_25_D2")
-dnn_setup.train_model("caltech_model")
-dnn_setup.plot_rocs("roc_test.png")
+#mva_setup.train_dnn("model_50_D2_25_D2_25_D2")
+#mva_setup.train_dnn("caltech_model")
+#mva_setup.plot_rocs("roc_test.png")
+
+mva_setup.add_model("model_50_D2_25_D2_25_D2")
+mva_setup.add_model("caltech_model")
+mva_setup.add_model("simple_dt")
+
+mva_setup.train_models()
