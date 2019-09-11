@@ -1,11 +1,16 @@
 import os, sys
 import glob
+import argparse
 sys.path.append('../')
 sys.path.append('../hepaccelerate/')
 sys.path.append('../tests/hmm/')
 from pars import datasets
 from hmumu_utils import create_dataset_jobfiles
 import json
+
+parser = argparse.ArgumentParser(description='Parser')
+parser.add_argument('--to_resubmit', action='store_true', help='Create jobfiles for resubmission')
+args = parser.parse_args()
 
 filenames_cache = {}
 chunksize_multiplier = {}
@@ -38,10 +43,15 @@ for dataset in datasets:
         if not glob.glob(cachepath+f.replace(".root", "*")):
             filenames_all_full.append(datapath + f)
             missing += 1
-#    chunksize = chunksize_multiplier.get(dataset_name, 1)
-#    print("Saving dataset {0}_{1} with {2} files in {3} files per chunk to jobfiles".format(dataset_name, dataset_era, len(filenames_all_full), chunksize))
-#    jobfile_dataset = create_dataset_jobfiles(dataset_name, dataset_era,filenames_all_full, is_mc, chunksize, "./")
-#    jobfile_data += jobfile_dataset
-#    print("Dataset {0}_{1} consists of {2} chunks".format(dataset_name, dataset_era, len(jobfile_dataset)))
+
+    jobfile_dataset = []
+    if args.to_resubmit:
+        chunksize = chunksize_multiplier.get(dataset_name, 1)
+        print("Saving dataset {0}_{1} with {2} files in {3} files per chunk to jobfiles".format(dataset_name, dataset_era, len(filenames_all_full), chunksize))
+        jobfile_dataset = create_dataset_jobfiles(dataset_name, dataset_era,filenames_all_full, is_mc, chunksize, "./to_resubmit/")
+        jobfile_data += jobfile_dataset
+        print("Dataset {0}_{1} consists of {2} chunks".format(dataset_name, dataset_era, len(jobfile_dataset)))
 
 print("{0}:  Missing cache for {1} files out of {2}".format(cachepath, missing, total))
+if args.to_resubmit:
+    print("Jobfiles for resubmission saved in ./to_resubmit/jobfiles/")
