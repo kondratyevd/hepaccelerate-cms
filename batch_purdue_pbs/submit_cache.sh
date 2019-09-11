@@ -24,5 +24,5 @@ for f in `cat jobfiles_merged.txt`; do
     cat template.sub > cache_.sub
     echo "./hmm_cache.sh $f" >> cache_.sub
     qsub cache_.sub -q $queue
-    break # to test on 1 job
+#    break # to test on 1 job
 done
