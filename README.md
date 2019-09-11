@@ -69,15 +69,16 @@ mkdir logs
 
 . submit_cache.sh
 # wait for completion..
-
-# Once the jobs are completed, check how many failed:
+~~~
+Once the jobs are completed, check how many failed:
+~~~
 python3 find_failed.py
-~~~
-If any files in cache are missing, resubmit the jobs for the corresponding datasets:
-~~~
+
+# If any files in cache are missing, resubmit the jobs for the corresponding datasets:
+
 . resubmit_cache.sh
 ~~~
-Hint: depending on how many chunks are missing from the output, you may want to set different number of chunks per job for resubmission for faster processing (default is 20). 
+*Hint:* depending on how many chunks are missing from the output, you may want to set different number of chunks per job for resubmission for faster processing (default is 20). 
 For example, if 200 chunks are missing, you can run `. resubmit_jobs.sh cms 1` to submit 200 small jobs (instead of 10 bigger jobs submitted by default). 
 
 Repeat resubmision as many times as needed, and wait for all jobs to finish...
