@@ -55,16 +55,18 @@ Run these commands from Hammer frontend (hammer.rcac.purdue.edu):
 Stage 1: caching
 ---
 
+Cache is not meant to be produced frequently; reproducing it takes a lot of time and storage space. 
+Please proceed to the next stage, unless you are confident that you need to reproduce the cache.
+
+We currently store cache at `/depot/cms/hmm/cache/`, it is available for all members of the group.
+
 ~~~
 # The input and output directories are defined in `hmm_cache.py`
 
 cd batch_purdue_pbs
 mkdir logs
-
-# Set up VOMS proxy
 . setup_proxy.sh
 
-# Submit PBS jobs
 . submit_cache.sh
 # wait for completion..
 
@@ -80,10 +82,6 @@ Stage 2 & 3: analysis, plots and datacards
 cd batch_purdue_pbs
 mkdir logs
 
-# Set up VOMS proxy
-. setup_proxy.sh
-
-# Submit PBS jobs
 . submit_analyze.sh
 # wait for completion..
 
