@@ -34,7 +34,7 @@ class MVASetup(object):
         self.category_labels = {}
         self.categories = []
         self.mva_models = []
-        self.trained_models = {}
+        self.roc_curves = {}
         self.feature_sets = {}
         self.scalers = {}
         self.df = pd.DataFrame()
@@ -72,8 +72,8 @@ class MVASetup(object):
 
         self.scalers[label] = StandardScaler().fit(self.x_train[inputs].values)
         training_data = self.scalers[label].transform(self.x_train[inputs].values)
-        return training_data
-#        self.x_test[inputs] = self.scalers[label].transform(self.x_test[inputs].values)
+        testing_data = self.scalers[label].transform(self.x_test[inputs].values)
+        return training_data, testing_data
 
     def train_models(self):
         if not self.feature_sets:
@@ -85,11 +85,9 @@ class MVASetup(object):
 
         for feature_set_name, feature_set in self.feature_sets.items():
 
-#            print("Considering feature set {0}...".format(feature_set_name))
-            training_data = self.prepare_data(feature_set_name, feature_set)
+            training_data, testing_data = self.prepare_data(feature_set_name, feature_set)
 
             for model_name in self.mva_models:
-#                print("Considering model {0}".format(model_name))
                 output_dim = len(self.categories)
                 model = get_model(model_name)
 
@@ -102,17 +100,13 @@ class MVASetup(object):
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
                 model.train_model(training_data, self.y_train, feature_set_name, feature_set)
-
+                self.roc_curves[model_name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, feature_set_name))
+                
     def plot_rocs(self, out_name):
-        roc_parameters = {} # [0]: fpr, [1]: tpr, [2]: threshold
-        for model_name, model in self.trained_models.items():
-            predictions = model.model.predict(self.x_test).ravel()
-            roc_parameters[model_name] = roc_curve(self.y_test, predictions)
-        
         plt.clf()
         plt.plot([0, 1], [0, 1], 'k--')
-        for model_name, roc in roc_parameters.items():
-            plt.plot(roc[0], roc[1], label=model_name)
+        for name, roc in self.roc_curves.items():
+            plt.plot(roc[0], roc[1], label=name) # [0]: fpr, [1]: tpr, [2]: threshold
         plt.xlabel('False positive rate')
         plt.ylabel('True positive rate')
         plt.title('Test ROC curves')
@@ -159,4 +153,4 @@ mva_setup.add_model("simple_dt")
 
 mva_setup.train_models()
 
-#mva_setup.plot_rocs("roc_test.png")
+mva_setup.plot_rocs("roc_test.png")

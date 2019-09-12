@@ -24,16 +24,18 @@ class KerasModel(MVAModel):
         self.epochs = epochs
         self.loss = loss
         self.optimizer = optimizer
+        self.model = {}
+        self.history = {}
 
     def train_model(self, x_train, y_train, feature_set_name, feature_set):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
             self.add_feature_set(feature_set_name, feature_set)
         inputs, outputs = get_architecture(self.name, feature_set_name, feature_set)
-        self.model = Model(inputs=inputs, outputs=outputs)
-        self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=["accuracy"])
-        self.model.summary()
-        self.history = self.model.fit(
+        self.model[feature_set_name] = Model(inputs=inputs, outputs=outputs)
+        self.model[feature_set_name].compile(loss=self.loss, optimizer=self.optimizer, metrics=["accuracy"])
+        self.model[feature_set_name].summary()
+        self.history[feature_set_name] = self.model[feature_set_name].fit(
                                     x_train,
                                     y_train,
                                     epochs=self.epochs,
@@ -41,6 +43,10 @@ class KerasModel(MVAModel):
                                     verbose=1,
                                     validation_split=0.33,
                                     shuffle=True)
+
+    def predict(self, x_test, feature_set_name):
+        return self.model[feature_set_name].predict(x_test).ravel()
+
 #        self.model.save(self.model_dir+model.name+'_trained.h5')
 #        self.trained_models[model_name] = model
 
@@ -57,13 +63,20 @@ class KerasModel(MVAModel):
 class SklearnBdtModel(MVAModel):
     def __init__(self, name, binary):
         super().__init__(name, binary)
+        self.model = {}
 
     def train_model(self, x_train, y_train, feature_set_name, feature_set):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
-        decision_tree = DecisionTreeClassifier(random_state=0, max_depth=2)
-        decision_tree = decision_tree.fit(x_train, y_train)
-        r = export_text(decision_tree, feature_names=feature_set)
+        if feature_set_name not in self.feature_sets.keys():
+            self.add_feature_set(feature_set_name, feature_set)
+        model = DecisionTreeClassifier(random_state=0, max_depth=2)
+        self.model[feature_set_name] = model.fit(x_train, y_train)
+        r = export_text(self.model[feature_set_name], feature_names=feature_set)
         print(r)
+
+    def predict(self, x_test, feature_set_name):
+        return self.model[feature_set_name].predict(x_test).ravel()
+
 
 def get_model(name):
     if name in initialized_models.keys():
