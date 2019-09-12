@@ -1,12 +1,22 @@
 import keras
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Input, Dropout, Concatenate, Lambda, BatchNormalization
 from keras.regularizers import l2
 from keras.optimizers import SGD
 import tensorflow as tf
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree.export import export_text
+
+from architectures import architectures
+
+
+def get_architecture(name, feature_set_name, feature_set):
+    input_dim = len(feature_set)
+    if name not in architectures.keys():
+        print("Architecture not defined for {0}!".format(name))
+        sys.exit(1)
+
+    return architectures[name](name+"_"+feature_set_name, input_dim)
 
 class MVAModel(object):
     def __init__(self, name, binary):
@@ -48,7 +58,6 @@ class KerasModel(MVAModel):
         return self.model[feature_set_name].predict(x_test).ravel()
 
 #        self.model.save(self.model_dir+model.name+'_trained.h5')
-#        self.trained_models[model_name] = model
 
 #        if plot_history:
 #            plt.clf()
@@ -77,52 +86,3 @@ class SklearnBdtModel(MVAModel):
     def predict(self, x_test, feature_set_name):
         return self.model[feature_set_name].predict(x_test).ravel()
 
-
-def get_model(name):
-    if name in initialized_models.keys():
-        return initialized_models[name]
-    else:
-        print("Model {0} has not been initialized!".format(name))
-        sys.exit(1)
-
-initialized_models = {
-        "model_purdue_old":  KerasModel('model_purdue_old', 2048, 10, 'binary_crossentropy', 'adam', True),
-        "caltech_model" : KerasModel('caltech_model', 2048, 10, 'binary_crossentropy', 'adam', True),
-        "simple_dt" : SklearnBdtModel('simple_dt', True),
-    }
-
-def get_architecture(name, feature_set_name, feature_set):
-    input_dim = len(feature_set)
-
-    def model_purdue_old_architecture(label, input_dim):
-        inputs = Input(shape=(len(feature_set),), name = label+'_input') 
-        x = Dense(50, name = label+'_layer_1', activation='relu')(inputs)
-        x = Dropout(0.2)(x)
-        x = Dense(25, name = label+'_layer_2', activation='relu')(x)
-        x = Dropout(0.2)(x)
-        x = Dense(25, name = label+'_layer_3', activation='relu')(x)
-        x = Dropout(0.2)(x)
-        outputs = Dense(1, name = label+'_output',  activation='sigmoid')(x)
-        return inputs, outputs
-
-    def model_caltech_architecture(label, input_dim):
-        inputs = Input(shape=(len(feature_set),), name = label+'_input')
-        x = Dense(100, name = label+'_layer_1', activation='tanh')(inputs)
-        x = Dropout(0.2)(x)
-        x = Dense(100, name = label+'_layer_2', activation='tanh')(x)
-        x = Dropout(0.2)(x)
-        x = Dense(100, name = label+'_layer_3', activation='tanh')(x)
-        x = Dropout(0.2)(x)
-        outputs = Dense(1, name = label+'_output',  activation='sigmoid')(x)
-        return inputs, outputs
-
-    architectures = {
-        "model_purdue_old": model_purdue_old_architecture,
-        "caltech_model": model_caltech_architecture,
-    }
-
-    if name not in architectures.keys():
-        print("Architecture not defined for {0}!".format(name))
-        sys.exit(1)
-
-    return architectures[name](name+"_"+feature_set_name, input_dim)

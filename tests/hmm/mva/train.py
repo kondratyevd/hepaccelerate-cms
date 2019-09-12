@@ -5,11 +5,13 @@ import glob
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
 from keras.utils import to_categorical
-from models import get_model
+
+from mva_utils import KerasModel, SklearnBdtModel
 
 def read_npy(path):
     content = np.load(path)
@@ -48,9 +50,9 @@ class MVASetup(object):
     def add_feature_set(self, name, option):
         self.feature_sets[name] = option
 
-    def add_model(self, model_name):
-        print("Adding model: {0}".format(model_name))
-        self.mva_models.append(model_name)
+    def load_model(self, model):
+        print("Adding model: {0}".format(model.name))
+        self.mva_models.append(model)
 
     def load_as_category(self, path, ds, cat_index):
         # categories should be enumerated from 0 to num.cat. - 1
@@ -87,9 +89,7 @@ class MVASetup(object):
 
             training_data, testing_data = self.prepare_data(feature_set_name, feature_set)
 
-            for model_name in self.mva_models:
-                output_dim = len(self.categories)
-                model = get_model(model_name)
+            for model in self.mva_models:
 
                 if model.binary:
                     if len(self.categories) is not 2:
@@ -100,7 +100,8 @@ class MVASetup(object):
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
                 model.train_model(training_data, self.y_train, feature_set_name, feature_set)
-                self.roc_curves[model_name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, feature_set_name))
+
+                self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, feature_set_name))
                 
     def plot_rocs(self, out_name):
         plt.clf()
@@ -115,6 +116,7 @@ class MVASetup(object):
         print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
 
 
+### Configuration ###
 
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
@@ -134,11 +136,20 @@ caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', '
                 'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj', 'dRmin_mmj', 'dRmax_mmj', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
                 'softJet5', 'Higgs_pt', 'Higgs_eta']
 
+initialized_models = [
+        KerasModel('model_purdue_old', 2048, 10, 'binary_crossentropy', 'adam', binary=True),
+        KerasModel('caltech_model', 2048, 10, 'binary_crossentropy', 'adam', binary=True),
+        SklearnBdtModel('simple_dt', binary=True),
+    ]
+
+
+### Load configuration and run training ###
 
 mva_setup = MVASetup()
 mva_setup.out_dir = "tests/hmm/mva/performance/"
 mva_setup.model_dir = "tests/hmm/dnn/trained_models/"
 mva_setup.category_labels = {0: "signal", 1: "background"}
+
 for s in sig_list:
     mva_setup.load_as_category(ds_path,s,0)
 for b in bkg_list:
@@ -147,9 +158,8 @@ for b in bkg_list:
 mva_setup.add_feature_set("V1",caltech_vars)
 mva_setup.add_feature_set("V2",caltech_vars_no_mass)
 
-mva_setup.add_model("model_purdue_old")
-mva_setup.add_model("caltech_model")
-mva_setup.add_model("simple_dt")
+for m in initialized_models:
+    mva_setup.load_model(m)
 
 mva_setup.train_models()
 
