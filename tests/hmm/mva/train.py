@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
 from keras.utils import to_categorical
 
+from architectures import architectures
 from mva_utils import KerasModel, SklearnBdtModel
 
 def read_npy(path):
@@ -137,8 +138,8 @@ caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', '
                 'softJet5', 'Higgs_pt', 'Higgs_eta']
 
 initialized_models = [
-        KerasModel(name='model_purdue_old', batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam', binary=True),
-        KerasModel(name='caltech_model', batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam', binary=True),
+        KerasModel(name='model_purdue_old', arch=architectures['model_purdue_old'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
+        KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
         SklearnBdtModel(name='simple_dt', binary=True),
     ]
 

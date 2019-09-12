@@ -1,6 +1,5 @@
 from keras.layers import Dense, Activation, Input, Dropout, Concatenate, Lambda, BatchNormalization
 
-
 def model_purdue_old_architecture(label, input_dim):
     inputs = Input(shape=(input_dim,), name = label+'_input')
     x = Dense(50, name = label+'_layer_1', activation='relu')(inputs)

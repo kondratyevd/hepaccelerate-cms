@@ -1,22 +1,7 @@
-import keras
-from keras.models import Sequential, Model
-from keras.regularizers import l2
-from keras.optimizers import SGD
-import tensorflow as tf
-
+from keras.models import Model
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree.export import export_text
 
-from architectures import architectures
-
-
-def get_architecture(name, feature_set_name, feature_set):
-    input_dim = len(feature_set)
-    if name not in architectures.keys():
-        print("Architecture not defined for {0}!".format(name))
-        sys.exit(1)
-
-    return architectures[name](name+"_"+feature_set_name, input_dim)
 
 class MVAModel(object):
     def __init__(self, name, binary):
@@ -28,8 +13,9 @@ class MVAModel(object):
         self.feature_sets[feature_set_name] = feature_set
 
 class KerasModel(MVAModel):
-    def __init__(self, name, batch_size, epochs, loss, optimizer, binary = False):
+    def __init__(self, name, arch, batch_size, epochs, loss, optimizer, binary = False):
         super().__init__(name, binary)
+        self.architecture = arch
         self.batch_size = batch_size
         self.epochs = epochs
         self.loss = loss
@@ -41,7 +27,7 @@ class KerasModel(MVAModel):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
             self.add_feature_set(feature_set_name, feature_set)
-        inputs, outputs = get_architecture(self.name, feature_set_name, feature_set)
+        inputs, outputs = self.architecture(label=self.name+"_"+feature_set_name, input_dim=len(feature_set))
         self.model[feature_set_name] = Model(inputs=inputs, outputs=outputs)
         self.model[feature_set_name].compile(loss=self.loss, optimizer=self.optimizer, metrics=["accuracy"])
         self.model[feature_set_name].summary()
