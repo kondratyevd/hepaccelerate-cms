@@ -9,27 +9,30 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.tree.export import export_text
 
 class MVAModel(object):
-    def __init__(self, name, feature_set, binary):
+    def __init__(self, name, binary):
         self.name = name
-        self.feature_set = feature_set
         self.binary = binary
+        self.feature_sets = {}
+
+    def add_feature_set(self, feature_set_name, feature_set):
+        self.feature_sets[feature_set_name] = feature_set
 
 class KerasModel(MVAModel):
-    def __init__(self, name, feature_set, input_dim, batchSize, epochs, loss, optimizer, binary = False):
-        super().__init__(name, feature_set, binary)
+    def __init__(self, name, batchSize, epochs, loss, optimizer, binary = False):
+        super().__init__(name, binary)
         self.batchSize = batchSize
         self.epochs = epochs
-        self.inputs = Input(shape=(len(self.feature_set),), name = self.name+'_input')
         self.loss = loss
         self.optimizer = optimizer
 
-    def compile_model(self):
-        self.model = Model(inputs=self.inputs, outputs=self.outputs)
+    def train_model(self, x_train, y_train, feature_set_name, feature_set):
+        print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
+        if feature_set_name not in self.feature_sets.keys():
+            self.add_feature_set(feature_set_name, feature_set)
+        inputs, outputs = get_architecture(self.name, feature_set_name, feature_set)
+        self.model = Model(inputs=inputs, outputs=outputs)
         self.model.compile(loss=self.loss, optimizer=self.optimizer, metrics=["accuracy"])
         self.model.summary()
-
-    def train_model(self, x_train, y_train):
-        self.compile_model()
         self.history = self.model.fit(
                                     x_train,
                                     y_train,
@@ -52,44 +55,61 @@ class KerasModel(MVAModel):
 #           plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
 
 class SklearnBdtModel(MVAModel):
-    def __init__(self, name, feature_set, binary):
-        super().__init__(name, feature_set, binary)
+    def __init__(self, name, binary):
+        super().__init__(name, binary)
 
-    def train_model(self, x_train, y_train):
+    def train_model(self, x_train, y_train, feature_set_name, feature_set):
+        print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         decision_tree = DecisionTreeClassifier(random_state=0, max_depth=2)
         decision_tree = decision_tree.fit(x_train, y_train)
-        r = export_text(decision_tree, feature_names=self.feature_set)
+        r = export_text(decision_tree, feature_names=feature_set)
         print(r)
 
-def get_model(name, feature_set_name, feature_set, output_dim):
-    
-    input_dim = len(feature_set)
-    # For multi-class models set number of units in output layer to out_dim  
+def get_model(name):
+    if name in initialized_models.keys():
+        return initialized_models[name]
+    else:
+        print("Model {0} has not been initialized!".format(name))
+        sys.exit(1)
 
-    model_purdue_old = KerasModel('model_purdue_old_'+feature_set_name, feature_set, input_dim, 2048, 10, 'binary_crossentropy', 'adam', True)
-    x = Dense(50, name = model_purdue_old.name+'_layer_1', activation='relu')(model_purdue_old.inputs)
-    x = Dropout(0.2)(x)
-    x = Dense(25, name = model_purdue_old.name+'_layer_2', activation='relu')(x)
-    x = Dropout(0.2)(x)
-    x = Dense(25, name = model_purdue_old.name+'_layer_3', activation='relu')(x)
-    x = Dropout(0.2)(x)
-    model_purdue_old.outputs = Dense(1, name = model_purdue_old.name+'_output',  activation='sigmoid')(x)
-
-    caltech_model = KerasModel('caltech_model_'+feature_set_name, feature_set, input_dim, 2048, 10, 'binary_crossentropy', 'adam', True)
-    x = Dense(100, name = caltech_model.name+'_layer_1', activation='tanh')(caltech_model.inputs)
-    x = Dropout(0.2)(x)
-    x = Dense(100, name = caltech_model.name+'_layer_2', activation='tanh')(x)
-    x = Dropout(0.2)(x)
-    x = Dense(100, name = caltech_model.name+'_layer_3', activation='tanh')(x)
-    x = Dropout(0.2)(x)
-    caltech_model.outputs = Dense(1, name = caltech_model.name+'_output',  activation='sigmoid')(x)
-
-    simple_dt = SklearnBdtModel('simple_dt_'+feature_set_name, feature_set, True)
-
-    models = {
-        "model_purdue_old": model_purdue_old,
-        "caltech_model": caltech_model,
-        "simple_dt": simple_dt
+initialized_models = {
+        "model_purdue_old":  KerasModel('model_purdue_old', 2048, 10, 'binary_crossentropy', 'adam', True),
+        "caltech_model" : KerasModel('caltech_model', 2048, 10, 'binary_crossentropy', 'adam', True),
+        "simple_dt" : SklearnBdtModel('simple_dt', True),
     }
-    
-    return models[name]
+
+def get_architecture(name, feature_set_name, feature_set):
+    input_dim = len(feature_set)
+
+    def model_purdue_old_architecture(label, input_dim):
+        inputs = Input(shape=(len(feature_set),), name = label+'_input') 
+        x = Dense(50, name = label+'_layer_1', activation='relu')(inputs)
+        x = Dropout(0.2)(x)
+        x = Dense(25, name = label+'_layer_2', activation='relu')(x)
+        x = Dropout(0.2)(x)
+        x = Dense(25, name = label+'_layer_3', activation='relu')(x)
+        x = Dropout(0.2)(x)
+        outputs = Dense(1, name = label+'_output',  activation='sigmoid')(x)
+        return inputs, outputs
+
+    def model_caltech_architecture(label, input_dim):
+        inputs = Input(shape=(len(feature_set),), name = label+'_input')
+        x = Dense(100, name = label+'_layer_1', activation='tanh')(inputs)
+        x = Dropout(0.2)(x)
+        x = Dense(100, name = label+'_layer_2', activation='tanh')(x)
+        x = Dropout(0.2)(x)
+        x = Dense(100, name = label+'_layer_3', activation='tanh')(x)
+        x = Dropout(0.2)(x)
+        outputs = Dense(1, name = label+'_output',  activation='sigmoid')(x)
+        return inputs, outputs
+
+    architectures = {
+        "model_purdue_old": model_purdue_old_architecture,
+        "caltech_model": model_caltech_architecture,
+    }
+
+    if name not in architectures.keys():
+        print("Architecture not defined for {0}!".format(name))
+        sys.exit(1)
+
+    return architectures[name](name+"_"+feature_set_name, input_dim)

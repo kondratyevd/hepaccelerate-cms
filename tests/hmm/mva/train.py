@@ -8,8 +8,6 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
-#from sklearn.tree import DecisionTreeClassifier
-#from sklearn.tree.export import export_text
 from keras.utils import to_categorical
 from models import get_model
 
@@ -32,7 +30,7 @@ def filter(df):
     return df
 
 class MVASetup(object):
-    def __init__(self, out_dir):
+    def __init__(self):
         self.category_labels = {}
         self.categories = []
         self.mva_models = []
@@ -42,8 +40,8 @@ class MVASetup(object):
         self.df = pd.DataFrame()
         self.df_dict = {}
         self.inputs = []
-        self.out_dir = out_dir
-        self.model_dir = "tests/hmm/dnn/trained_models/"
+        self.out_dir = ""
+        self.model_dir = ""
         os.system("mkdir -p "+self.out_dir)
         os.system("mkdir -p "+self.model_dir)
 
@@ -86,12 +84,15 @@ class MVASetup(object):
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='b'], self.df["cat_index"], test_size=0.25, shuffle=True)
 
         for feature_set_name, feature_set in self.feature_sets.items():
+
+#            print("Considering feature set {0}...".format(feature_set_name))
             training_data = self.prepare_data(feature_set_name, feature_set)
-#            input_dim = len(feature_set)
+
             for model_name in self.mva_models:
-                print("Considering model {0}".format(model_name))
+#                print("Considering model {0}".format(model_name))
                 output_dim = len(self.categories)
-                model = get_model(model_name, feature_set_name, feature_set, output_dim)
+                model = get_model(model_name)
+
                 if model.binary:
                     if len(self.categories) is not 2:
                         print("Can't perform binary classification with {0} categories!".format(len(self.categories)))
@@ -99,7 +100,8 @@ class MVASetup(object):
                 else:
                     self.y_train = to_categorical(self.y_train, len(self.categories))
                     self.y_test = to_categorical(self.y_test, len(self.categories))
-                model.train_model(training_data, self.y_train)
+
+                model.train_model(training_data, self.y_train, feature_set_name, feature_set)
 
     def plot_rocs(self, out_name):
         roc_parameters = {} # [0]: fpr, [1]: tpr, [2]: threshold
@@ -120,8 +122,6 @@ class MVASetup(object):
 
 
 
-
-mva_setup = MVASetup(out_dir = "tests/hmm/mva/performance/")
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
 #            "ggh_*", 
@@ -133,23 +133,25 @@ bkg_list = [
 #            "dy_[0-9][0-9]",
 #            "ttjets_dl_*",
             ]
-caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj',
-      'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj',
-      'leadingJet_pt', 'subleadingJet_pt',
-      'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj',
-      'dRmin_mmj', 'dRmax_mmj', 'Zep',  'leadingJet_qgl',
-      'subleadingJet_qgl', 'cthetaCS', 'softJet5', 'Higgs_pt', 'Higgs_eta',
-     'Higgs_mass']
+caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
+                'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj', 'dRmin_mmj', 'dRmax_mmj', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS', 
+                'softJet5', 'Higgs_pt', 'Higgs_eta', 'Higgs_mass']
+caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
+                'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj', 'dRmin_mmj', 'dRmax_mmj', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
+                'softJet5', 'Higgs_pt', 'Higgs_eta']
 
-mva_setup.add_feature_set("caltech_variables",caltech_vars)
 
+mva_setup = MVASetup()
+mva_setup.out_dir = "tests/hmm/mva/performance/"
+mva_setup.model_dir = "tests/hmm/dnn/trained_models/"
 mva_setup.category_labels = {0: "signal", 1: "background"}
-
 for s in sig_list:
     mva_setup.load_as_category(ds_path,s,0)
 for b in bkg_list:
     mva_setup.load_as_category(ds_path,b,1)
-)
+
+mva_setup.add_feature_set("V1",caltech_vars)
+mva_setup.add_feature_set("V2",caltech_vars_no_mass)
 
 mva_setup.add_model("model_purdue_old")
 mva_setup.add_model("caltech_model")
