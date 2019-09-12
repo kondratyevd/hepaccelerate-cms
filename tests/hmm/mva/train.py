@@ -137,9 +137,9 @@ caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', '
                 'softJet5', 'Higgs_pt', 'Higgs_eta']
 
 initialized_models = [
-        KerasModel('model_purdue_old', 2048, 10, 'binary_crossentropy', 'adam', binary=True),
-        KerasModel('caltech_model', 2048, 10, 'binary_crossentropy', 'adam', binary=True),
-        SklearnBdtModel('simple_dt', binary=True),
+        KerasModel(name='model_purdue_old', batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam', binary=True),
+        KerasModel(name='caltech_model', batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam', binary=True),
+        SklearnBdtModel(name='simple_dt', binary=True),
     ]
 
 

@@ -28,9 +28,9 @@ class MVAModel(object):
         self.feature_sets[feature_set_name] = feature_set
 
 class KerasModel(MVAModel):
-    def __init__(self, name, batchSize, epochs, loss, optimizer, binary = False):
+    def __init__(self, name, batch_size, epochs, loss, optimizer, binary = False):
         super().__init__(name, binary)
-        self.batchSize = batchSize
+        self.batch_size = batch_size
         self.epochs = epochs
         self.loss = loss
         self.optimizer = optimizer
@@ -49,7 +49,7 @@ class KerasModel(MVAModel):
                                     x_train,
                                     y_train,
                                     epochs=self.epochs,
-                                    batch_size=self.batchSize,
+                                    batch_size=self.batch_size,
                                     verbose=1,
                                     validation_split=0.33,
                                     shuffle=True)
