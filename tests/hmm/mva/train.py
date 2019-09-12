@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.tree.export import export_text
+#from sklearn.tree import DecisionTreeClassifier
+#from sklearn.tree.export import export_text
 from keras.utils import to_categorical
 from models import get_model
 
@@ -35,7 +35,7 @@ class MVASetup(object):
     def __init__(self, out_dir):
         self.category_labels = {}
         self.categories = []
-        self.mva_models = {}
+        self.mva_models = []
         self.trained_models = {}
         self.feature_sets = {}
         self.scalers = {}
@@ -52,7 +52,7 @@ class MVASetup(object):
 
     def add_model(self, model_name):
         print("Adding model: {0}".format(model_name))
-        self.mva_models[model_name] = get_model(model_name)
+        self.mva_models.append(model_name)
 
     def load_as_category(self, path, ds, cat_index):
         # categories should be enumerated from 0 to num.cat. - 1
@@ -78,63 +78,28 @@ class MVASetup(object):
 #        self.x_test[inputs] = self.scalers[label].transform(self.x_test[inputs].values)
 
     def train_models(self):
+        if not self.feature_sets:
+            print("Error: no input feature sets found!")
+            sys.exit(1)
         self.df = pd.concat(self.df_dict.values())
         self.df = filter(self.df) 
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='b'], self.df["cat_index"], test_size=0.25, shuffle=True)
+
         for feature_set_name, feature_set in self.feature_sets.items():
             training_data = self.prepare_data(feature_set_name, feature_set)
-            for mva_model in self.mva_models:
-                # mva_model.train_model()
-                pass
-
-    def train_dnn(self, model_name, binary=True, plot_history=True):
-        if self.inputs:
-            input_dim = len(self.inputs)
-        else:
-            print("Error: no inputs found!")
-            sys.exit(1)
-
-        if binary:
-            if len(self.categories) is 2:
-                output_dim = 1 
-            else:
-                print("Can't perform binary classification with {0} categories!".format(len(self.categories)))
-                sys.exit(1)
-        else:
-            output_dim = len(self.categories)
-            self.y_train = to_categorical(self.y_train, len(self.categories))
-            self.y_test = to_categorical(self.y_test, len(self.categories))
-
-        model = get_model(model_name, input_dim, output_dim)
-        model.compile_model()
-
-        history = model.model.fit(            
-                                    self.x_train,
-                                    self.y_train,
-                                    epochs=model.epochs, 
-                                    batch_size=model.batchSize, 
-                                    verbose=1,
-                                    validation_split=0.33,
-                                    shuffle=True)
-        
-        model.model.save(self.model_dir+model.name+'_trained.h5')
-        self.trained_models[model_name] = model
-
-        if plot_history:
-            plt.clf()
-            plt.plot(history.history['loss'])
-            plt.plot(history.history['val_loss'])
-            plt.title('Model loss')
-            plt.ylabel('Loss')
-            plt.xlabel('Epoch')
-            plt.legend(['Train', 'Test'], loc='upper left')
-            plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
-
-    def train_dt(self):
-        decision_tree = DecisionTreeClassifier(random_state=0, max_depth=2)
-        decision_tree = decision_tree.fit(self.x_train, self.y_train)
-        r = export_text(decision_tree, feature_names=self.inputs)
-        print(r)
+#            input_dim = len(feature_set)
+            for model_name in self.mva_models:
+                print("Considering model {0}".format(model_name))
+                output_dim = len(self.categories)
+                model = get_model(model_name, feature_set_name, feature_set, output_dim)
+                if model.binary:
+                    if len(self.categories) is not 2:
+                        print("Can't perform binary classification with {0} categories!".format(len(self.categories)))
+                        sys.exit(1)
+                else:
+                    self.y_train = to_categorical(self.y_train, len(self.categories))
+                    self.y_test = to_categorical(self.y_test, len(self.categories))
+                model.train_model(training_data, self.y_train)
 
     def plot_rocs(self, out_name):
         roc_parameters = {} # [0]: fpr, [1]: tpr, [2]: threshold
@@ -152,6 +117,9 @@ class MVASetup(object):
         plt.legend(loc='best')
         plt.savefig("{0}/{1}".format(self.out_dir, out_name))
         print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
+
+
+
 
 mva_setup = MVASetup(out_dir = "tests/hmm/mva/performance/")
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
@@ -181,17 +149,12 @@ for s in sig_list:
     mva_setup.load_as_category(ds_path,s,0)
 for b in bkg_list:
     mva_setup.load_as_category(ds_path,b,1)
+)
 
-#mva_setup.prepare_data(input_vars)
-#print("Training data loaded:")
-#print(mva_setup.x_train)
-
-#mva_setup.train_dnn("model_50_D2_25_D2_25_D2")
-#mva_setup.train_dnn("caltech_model")
-#mva_setup.plot_rocs("roc_test.png")
-
-mva_setup.add_model("model_50_D2_25_D2_25_D2")
+mva_setup.add_model("model_purdue_old")
 mva_setup.add_model("caltech_model")
 mva_setup.add_model("simple_dt")
 
 mva_setup.train_models()
+
+#mva_setup.plot_rocs("roc_test.png")
