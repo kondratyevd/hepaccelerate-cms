@@ -9,6 +9,8 @@ CMS-specific accelerated analysis code based on the [hepaccelerate](https://gith
 #Installation
 pip3 install --user scipy awkward uproot numba cffi lz4 cloudpickle pyyaml pylzma pandas
 pip3.6 install --user backports.lzma
+pip3.6 install --user scikit-learn==0.21.3
+pip3.6 install --upgrade --user tensorflow==1.14.0
 
 source /cvmfs/cms.cern.ch/cmsset_default.sh
 mkdir ~/hepaccelerate/
