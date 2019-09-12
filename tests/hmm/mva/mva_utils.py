@@ -56,19 +56,20 @@ class KerasModel(MVAModel):
 #           plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
 
 class SklearnBdtModel(MVAModel):
-    def __init__(self, name, binary):
+    def __init__(self, name, max_depth, binary):
         super().__init__(name, binary)
         self.model = {}
+        self.max_depth = max_depth
 
     def train_model(self, x_train, y_train, feature_set_name, feature_set):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
             self.add_feature_set(feature_set_name, feature_set)
-        model = DecisionTreeClassifier(random_state=0, max_depth=2)
+        model = DecisionTreeClassifier(random_state=0, max_depth=self.max_depth)
         self.model[feature_set_name] = model.fit(x_train, y_train)
         r = export_text(self.model[feature_set_name], feature_names=feature_set)
         print(r)
 
     def predict(self, x_test, feature_set_name):
-        return self.model[feature_set_name].predict(x_test).ravel()
+        return self.model[feature_set_name].predict_proba(x_test)[:,1].ravel()
 
