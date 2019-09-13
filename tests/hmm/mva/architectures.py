@@ -15,10 +15,13 @@ def model_caltech_architecture(label, input_dim):
     inputs = Input(shape=(input_dim,), name = label+'_input')
     x = Dense(100, name = label+'_layer_1', activation='tanh')(inputs)
     x = Dropout(0.2)(x)
+    x = BatchNormalization()(x)
     x = Dense(100, name = label+'_layer_2', activation='tanh')(x)
     x = Dropout(0.2)(x)
+    x = BatchNormalization()(x)
     x = Dense(100, name = label+'_layer_3', activation='tanh')(x)
     x = Dropout(0.2)(x)
+    x = BatchNormalization()(x)
     outputs = Dense(1, name = label+'_output',  activation='sigmoid')(x)
     return inputs, outputs
 

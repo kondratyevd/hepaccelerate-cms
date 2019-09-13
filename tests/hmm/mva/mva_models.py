@@ -41,7 +41,7 @@ class KerasModel(MVAModel):
                                     epochs=self.epochs,
                                     batch_size=self.batch_size,
                                     verbose=1,
-                                    validation_split=0.33,
+                                    validation_split=0.2,
                                     shuffle=True)
 
     def predict(self, x_test, y_test, feature_set_name):
