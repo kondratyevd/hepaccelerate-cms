@@ -114,6 +114,12 @@ Best results can be had if the CMS data is stored locally on a filesystem (few T
 A prebuilt singularity image with the GPU libraries is also provided: [link](http://login-1.hep.caltech.edu/~jpata/cupy.simg)
 
 
+# Contributing
+If you use this code, we are happy to consider issues and merge improvements.
+- Please make an issue on the Issues page for any bugs you find.
+- To contribute changes, please use the 'Fork and Pull' model: https://reflectoring.io/github-fork-and-pull.
+- For non-trivial pull requests, please ask at least one other person with push access to review the changes.
+
 ## Installation on Caltech T2 or GPU machine
 
 On Caltech, an existing singularity image can be used to get the required python libraries.
