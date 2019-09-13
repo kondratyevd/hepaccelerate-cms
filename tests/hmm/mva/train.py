@@ -1,133 +1,18 @@
-import os,sys
-import numpy as np
-import pandas as pd
-import glob
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_curve
-from keras.utils import to_categorical
-
+from utils import MVASetup
+from mva_models import KerasModel, SklearnBdtModel, TfBdtModel
 from architectures import architectures
-from mva_utils import KerasModel, SklearnBdtModel
-
-def read_npy(path):
-    content = np.load(path)
-    df = pd.DataFrame(data=content)
-    return df
-
-def get_dataset_from_path(path,dataset):
-    df_all = pd.DataFrame()
-    filepath = path+"/"+dataset+".npy"
-    for f in glob.glob(filepath):
-        df_ds = read_npy(f)
-        df_all = pd.concat((df_all, df_ds))
-        print("Appending data from ", f)
-    return df_all
-
-def filter(df):
-    df = df[(df['Higgs_mass']>110) & (df['Higgs_mass']<150)]
-    return df
-
-class MVASetup(object):
-    def __init__(self):
-        self.category_labels = {}
-        self.categories = []
-        self.mva_models = []
-        self.roc_curves = {}
-        self.feature_sets = {}
-        self.scalers = {}
-        self.df = pd.DataFrame()
-        self.df_dict = {}
-        self.inputs = []
-        self.out_dir = ""
-        self.model_dir = ""
-        os.system("mkdir -p "+self.out_dir)
-        os.system("mkdir -p "+self.model_dir)
-
-    def add_feature_set(self, name, option):
-        self.feature_sets[name] = option
-
-    def load_model(self, model):
-        print("Adding model: {0}".format(model.name))
-        self.mva_models.append(model)
-
-    def load_as_category(self, path, ds, cat_index):
-        # categories should be enumerated from 0 to num.cat. - 1
-        # 0, 1 for binary classification
-        if cat_index not in self.categories:
-            cat_name = "({0})".format(self.category_labels[cat_index]) if (cat_index in self.category_labels.keys()) else ""
-            print("Added new category: {0} {1}".format(cat_index, cat_name))
-            self.categories.append(cat_index)
-            self.df_dict[cat_index] = pd.DataFrame()
-        new_df = get_dataset_from_path(path, ds)
-        new_df["cat_index"] = cat_index
-        self.df_dict[cat_index] = pd.concat((self.df_dict[cat_index], new_df))
-
-    def prepare_data(self, label, inputs):
-        for i in inputs:
-            if i not in self.df.columns:
-                print("Feature set {0}: variable {1} not in columns!".format(label, i))
-                sys.exit(1)
-
-        self.scalers[label] = StandardScaler().fit(self.x_train[inputs].values)
-        training_data = self.scalers[label].transform(self.x_train[inputs].values)
-        testing_data = self.scalers[label].transform(self.x_test[inputs].values)
-        return training_data, testing_data
-
-    def train_models(self):
-        if not self.feature_sets:
-            print("Error: no input feature sets found!")
-            sys.exit(1)
-        self.df = pd.concat(self.df_dict.values())
-        self.df = filter(self.df) 
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='b'], self.df["cat_index"], test_size=0.25, shuffle=True)
-
-        for feature_set_name, feature_set in self.feature_sets.items():
-
-            training_data, testing_data = self.prepare_data(feature_set_name, feature_set)
-
-            for model in self.mva_models:
-
-                if model.binary:
-                    if len(self.categories) is not 2:
-                        print("Can't perform binary classification with {0} categories!".format(len(self.categories)))
-                        sys.exit(1)
-                else:
-                    self.y_train = to_categorical(self.y_train, len(self.categories))
-                    self.y_test = to_categorical(self.y_test, len(self.categories))
-
-                model.train_model(training_data, self.y_train, feature_set_name, feature_set)
-
-                self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, feature_set_name))
-                
-    def plot_rocs(self, out_name):
-        plt.clf()
-        plt.plot([0, 1], [0, 1], 'k--')
-        for name, roc in self.roc_curves.items():
-            plt.plot(roc[0], roc[1], label=name) # [0]: fpr, [1]: tpr, [2]: threshold
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('Test ROC curves')
-        plt.legend(loc='best')
-        plt.savefig("{0}/{1}".format(self.out_dir, out_name))
-        print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
-
 
 ### Configuration ###
 
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
 #            "ggh_*", 
-            "vbf_*", 
-#            "vbf_[0-9]",
+#            "vbf_*", 
+            "vbf_[0-9]",
             ]
 bkg_list = [
             "dy_[0-9]",
-            "dy_[0-9][0-9]",
+#            "dy_[0-9][0-9]",
 #            "ttjets_dl_*",
             ]
 caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
@@ -139,8 +24,9 @@ caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', '
 
 initialized_models = [
         KerasModel(name='model_purdue_old', arch=architectures['model_purdue_old'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
-        KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
-        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
+#        KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
+#        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
+         TfBdtModel(name='tf_bdt', n_trees=800, max_depth=10, max_steps=1000, batch_size=128)
     ]
 
 
@@ -149,12 +35,12 @@ initialized_models = [
 mva_setup = MVASetup()
 mva_setup.out_dir = "tests/hmm/mva/performance/"
 mva_setup.model_dir = "tests/hmm/dnn/trained_models/"
-mva_setup.category_labels = {0: "signal", 1: "background"}
+mva_setup.category_labels = {0.: "signal", 1.: "background"}
 
 for s in sig_list:
-    mva_setup.load_as_category(ds_path,s,0)
+    mva_setup.load_as_category(ds_path,s,0.)
 for b in bkg_list:
-    mva_setup.load_as_category(ds_path,b,1)
+    mva_setup.load_as_category(ds_path,b,1.)
 
 mva_setup.add_feature_set("V1",caltech_vars)
 mva_setup.add_feature_set("V2",caltech_vars_no_mass)
@@ -164,4 +50,4 @@ for m in initialized_models:
 
 mva_setup.train_models()
 
-mva_setup.plot_rocs("roc_test.png")
+mva_setup.plot_rocs("roc_test_1.png")
