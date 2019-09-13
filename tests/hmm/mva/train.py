@@ -6,14 +6,14 @@ from architectures import architectures
 
 ds_path = "/depot/cms/hmm/out_dkondra/dnn_vars/2016"
 sig_list = [
-#            "ggh_*", 
+            "ggh_*", 
 #            "vbf_*", 
             "vbf_[0-9]",
             ]
 bkg_list = [
             "dy_[0-9]",
 #            "dy_[0-9][0-9]",
-#            "ttjets_dl_*",
+            "ttjets_dl_[0-9]",
             ]
 caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
                 'leadingJet_eta', 'subleadingJet_eta', 'dRmin_mj', 'dRmax_mj', 'dRmin_mmj', 'dRmax_mmj', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS', 
@@ -24,9 +24,9 @@ caltech_vars_no_mass = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', '
 
 initialized_models = [
         KerasModel(name='model_purdue_old', arch=architectures['model_purdue_old'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
-#        KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
-#        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
-         TfBdtModel(name='tf_bdt', n_trees=800, max_depth=10, max_steps=1000, batch_size=128)
+        KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=10, loss='binary_crossentropy', optimizer='adam',binary=True),
+        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
+        TfBdtModel(name='tf_bdt', n_trees=800, max_depth=10, max_steps=1000, batch_size=128)
     ]
 
 

@@ -25,7 +25,7 @@ class KerasModel(MVAModel):
         self.model = {}
         self.history = {}
 
-    def train_model(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         feature_set = x_train.columns
         if feature_set_name not in self.feature_sets.keys():
@@ -47,17 +47,6 @@ class KerasModel(MVAModel):
     def predict(self, x_test, y_test, feature_set_name):
         return self.model[feature_set_name].predict(x_test).ravel()
 
-#        self.model.save(self.model_dir+model.name+'_trained.h5')
-
-#        if plot_history:
-#            plt.clf()
-#            plt.plot(history.history['loss'])
-#            plt.plot(history.history['val_loss'])
-#            plt.title('Model loss')
-#            plt.ylabel('Loss')
-#            plt.xlabel('Epoch')
-#            plt.legend(['Train', 'Test'], loc='upper left')
-#           plt.savefig("{0}/history_{1}".format(self.out_dir, model_name))
 
 class SklearnBdtModel(MVAModel):
     def __init__(self, name, max_depth, binary):
@@ -65,7 +54,7 @@ class SklearnBdtModel(MVAModel):
         self.model = {}
         self.max_depth = max_depth
 
-    def train_model(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name):
         feature_set = x_train.columns
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
@@ -101,7 +90,7 @@ class TfBdtModel(MVAModel):
         return input_fn
 
 
-    def train_model(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name):
         feature_set = x_train.columns
         self.nsamples = len(y_train)
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))

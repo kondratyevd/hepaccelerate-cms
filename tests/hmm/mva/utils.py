@@ -98,7 +98,7 @@ class MVASetup(object):
                     self.y_train = to_categorical(self.y_train, len(self.categories))
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
-                model.train_model(training_data, self.y_train, feature_set_name)
+                model.train(training_data, self.y_train, feature_set_name)
 
                 self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, self.y_test, feature_set_name))
                 
