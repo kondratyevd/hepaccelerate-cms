@@ -25,7 +25,7 @@ class KerasModel(MVAModel):
         self.model = {}
         self.history = {}
 
-    def train(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name, weights=None):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         feature_set = x_train.columns
         if feature_set_name not in self.feature_sets.keys():
@@ -54,7 +54,7 @@ class SklearnBdtModel(MVAModel):
         self.model = {}
         self.max_depth = max_depth
 
-    def train(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name, weights=None):
         feature_set = x_train.columns
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
@@ -90,7 +90,7 @@ class TfBdtModel(MVAModel):
         return input_fn
 
 
-    def train(self, x_train, y_train, feature_set_name):
+    def train(self, x_train, y_train, feature_set_name, weights=None):
         feature_set = x_train.columns
         self.nsamples = len(y_train)
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
@@ -99,7 +99,12 @@ class TfBdtModel(MVAModel):
         feature_columns = []
         for feature_name in feature_set:
             feature_columns.append(tf.feature_column.numeric_column(feature_name))
+        if not weights.empty:
+            weight_column = tf.feature_column.numeric_column('weight')
+            x_train_w = x_train
+            x_train_w['weight'] = weights.values
         self.model[feature_set_name] = tf.estimator.BoostedTreesClassifier(feature_columns=feature_columns, 
+                                                                           weight_column=weight_column,
                                                                            n_batches_per_layer=1, 
                                                                            n_trees=self.n_trees, 
                                                                            max_depth=self.max_depth,
@@ -109,7 +114,10 @@ class TfBdtModel(MVAModel):
 #                                                                           pruning_mode='post'
                                                                            )
 
-        self.model[feature_set_name].train(self.make_input_fn(x_train, y_train, training=True), max_steps=self.max_steps)
+        if not weights.empty:
+            self.model[feature_set_name].train(self.make_input_fn(x_train_w, y_train, training=True), max_steps=self.max_steps)
+        else:
+            self.model[feature_set_name].train(self.make_input_fn(x_train, y_train, training=True), max_steps=self.max_steps)
 
 
     def predict(self, x_test, y_test, feature_set_name):

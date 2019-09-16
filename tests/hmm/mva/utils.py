@@ -27,7 +27,7 @@ def get_dataset_from_path(path,dataset):
     return df_all
 
 def filter(df):
-    df = df[(df['Higgs_mass']>110) & (df['Higgs_mass']<150)]
+    df = df[(df['Higgs_mass']>110) & (df['Higgs_mass']<150) & (df['cat_index']==5) & (df['M_jj']>400)]
     return df
 
 class MVASetup(object):
@@ -53,17 +53,17 @@ class MVASetup(object):
         print("Adding model: {0}".format(model.name))
         self.mva_models.append(model)
 
-    def load_as_category(self, path, ds, cat_index):
+    def load_as_category(self, path, ds, category):
         # categories should be enumerated from 0 to num.cat. - 1
         # 0, 1 for binary classification
-        if cat_index not in self.categories:
-            cat_name = "({0})".format(self.category_labels[cat_index]) if (cat_index in self.category_labels.keys()) else ""
-            print("Added new category: {0} {1}".format(cat_index, cat_name))
-            self.categories.append(cat_index)
-            self.df_dict[cat_index] = pd.DataFrame()
+        if category not in self.categories:
+            cat_name = "({0})".format(self.category_labels[category]) if (category in self.category_labels.keys()) else ""
+            print("Added new category: {0} {1}".format(category, cat_name))
+            self.categories.append(category)
+            self.df_dict[category] = pd.DataFrame()
         new_df = get_dataset_from_path(path, ds)
-        new_df["cat_index"] = cat_index
-        self.df_dict[cat_index] = pd.concat((self.df_dict[cat_index], new_df))
+        new_df["category"] = category
+        self.df_dict[category] = pd.concat((self.df_dict[category], new_df))
 
     def prepare_data(self, label, inputs):
         for i in inputs:
@@ -81,8 +81,9 @@ class MVASetup(object):
             print("Error: no input feature sets found!")
             sys.exit(1)
         self.df = pd.concat(self.df_dict.values())
+        print(self.df.columns)
         self.df = filter(self.df) 
-        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='cat_index'], self.df["cat_index"], test_size=0.25, shuffle=True)
+        self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='category'], self.df["category"], train_size=0.6, test_size=0.4, shuffle=True)
 
         for feature_set_name, feature_set in self.feature_sets.items():
 
@@ -98,7 +99,7 @@ class MVASetup(object):
                     self.y_train = to_categorical(self.y_train, len(self.categories))
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
-                model.train(training_data, self.y_train, feature_set_name)
+                model.train(training_data, self.y_train, feature_set_name, self.x_train['genweight'])
 
                 self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, self.y_test, feature_set_name))
                 
