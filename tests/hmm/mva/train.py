@@ -10,6 +10,7 @@ sig_list = [
             "vbf_*", 
             ]
 bkg_list = [
+#             "dy_m105_160*_0"
             "dy_m105_160_*",
             "ewk_lljj_mll105_160_*",
             ]
@@ -24,7 +25,8 @@ initialized_models = [
         KerasModel(name='model_purdue_old', arch=architectures['model_purdue_old'], batch_size=2048, epochs=20, loss='binary_crossentropy', optimizer='adam',binary=True),
         KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=20, loss='binary_crossentropy', optimizer='adam',binary=True),
 #        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
-        TfBdtModel(name='tf_bdt', n_trees=800, max_depth=10, max_steps=500, batch_size=128)
+        TfBdtModel(name='tf_bdt', n_trees=800, max_depth=7, max_steps=500, batch_size=1024, tree_complexity=0.01, pruning='pre', lr=0.01, bpl=1),
+        TfBdtModel(name='tf_bdt_resweight', n_trees=800, max_depth=7, max_steps=500, batch_size=1024, tree_complexity=0.01, pruning='pre', lr=0.01, bpl=1, weighted=True),
     ]
 
 
@@ -48,4 +50,4 @@ for m in initialized_models:
 
 mva_setup.train_models()
 
-mva_setup.plot_rocs("roc_test_2.png")
+mva_setup.plot_rocs("roc_test_3.png")

@@ -67,13 +67,18 @@ class SklearnBdtModel(MVAModel):
 
 
 class TfBdtModel(MVAModel):
-    def __init__(self, name,  n_trees, max_depth, max_steps, batch_size):
+    def __init__(self, name,  n_trees, max_depth, max_steps, batch_size, tree_complexity, pruning, lr, bpl, weighted=False):
         super().__init__(name, binary=True)
         self.model = {}
         self.n_trees = n_trees
         self.max_depth = max_depth
         self.max_steps = max_steps
         self.batch_size = batch_size
+        self.tree_complexity = tree_complexity
+        self.weighted = weighted
+        self.pruning = pruning
+        self.lr = lr
+        self.bpl = bpl
 
     def make_input_fn(self, X, y, training=False):
         def input_fn():
@@ -99,22 +104,24 @@ class TfBdtModel(MVAModel):
         feature_columns = []
         for feature_name in feature_set:
             feature_columns.append(tf.feature_column.numeric_column(feature_name))
-        if not weights.empty:
+        if self.weighted and (not weights.empty):
             weight_column = tf.feature_column.numeric_column('weight')
             x_train_w = x_train
             x_train_w['weight'] = weights.values
+        else:
+            weight_column = None
         self.model[feature_set_name] = tf.estimator.BoostedTreesClassifier(feature_columns=feature_columns, 
                                                                            weight_column=weight_column,
-                                                                           n_batches_per_layer=1, 
+                                                                           n_batches_per_layer=self.bpl, 
                                                                            n_trees=self.n_trees, 
                                                                            max_depth=self.max_depth,
-                                                                           learning_rate=0.01,
+                                                                           learning_rate=self.lr,
                                                                            center_bias = True,
-#                                                                           tree_complexity = 0.001,
-#                                                                           pruning_mode='post'
+                                                                           tree_complexity = self.tree_complexity,
+                                                                           pruning_mode=self.pruning
                                                                            )
 
-        if not weights.empty:
+        if (self.weighted) and (not weights.empty):
             self.model[feature_set_name].train(self.make_input_fn(x_train_w, y_train, training=True), max_steps=self.max_steps)
         else:
             self.model[feature_set_name].train(self.make_input_fn(x_train, y_train, training=True), max_steps=self.max_steps)

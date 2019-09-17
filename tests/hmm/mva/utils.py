@@ -81,8 +81,9 @@ class MVASetup(object):
             print("Error: no input feature sets found!")
             sys.exit(1)
         self.df = pd.concat(self.df_dict.values())
-        print(self.df.columns)
         self.df = filter(self.df) 
+        self.df['resweight'] = 1/self.df['massErr_rel']
+
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='category'], self.df["category"], train_size=0.6, test_size=0.4, shuffle=True)
 
         for feature_set_name, feature_set in self.feature_sets.items():
@@ -99,7 +100,8 @@ class MVASetup(object):
                     self.y_train = to_categorical(self.y_train, len(self.categories))
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
-                model.train(training_data, self.y_train, feature_set_name, self.x_train['genweight'])
+                #model.train(training_data, self.y_train, feature_set_name)
+                model.train(training_data, self.y_train, feature_set_name, self.x_train['resweight'])
 
                 self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, self.y_test, feature_set_name))
                 
