@@ -25,7 +25,7 @@ class KerasModel(MVAModel):
         self.model = {}
         self.history = {}
 
-    def train(self, x_train, y_train, feature_set_name, weights=None):
+    def train(self, x_train, y_train, feature_set_name, model_dir, prefix, weights=None):
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         feature_set = x_train.columns
         if feature_set_name not in self.feature_sets.keys():
@@ -43,6 +43,7 @@ class KerasModel(MVAModel):
                                     verbose=1,
                                     validation_split=0.2,
                                     shuffle=True)
+        self.model[feature_set_name].save('{0}/{1}_{2}.h5'.format(model_dir, prefix, label))
 
     def predict(self, x_test, y_test, feature_set_name):
         return self.model[feature_set_name].predict(x_test).ravel()
@@ -54,7 +55,7 @@ class SklearnBdtModel(MVAModel):
         self.model = {}
         self.max_depth = max_depth
 
-    def train(self, x_train, y_train, feature_set_name, weights=None):
+    def train(self, x_train, y_train, feature_set_name, model_dir, prefix, weights=None):
         feature_set = x_train.columns
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))
         if feature_set_name not in self.feature_sets.keys():
@@ -95,7 +96,7 @@ class TfBdtModel(MVAModel):
         return input_fn
 
 
-    def train(self, x_train, y_train, feature_set_name, weights=None):
+    def train(self, x_train, y_train, feature_set_name, model_dir, prefix, weights=None):
         feature_set = x_train.columns
         self.nsamples = len(y_train)
         print("Considering model {0} with feature set {1}".format(self.name, feature_set_name))

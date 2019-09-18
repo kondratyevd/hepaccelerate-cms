@@ -2,9 +2,6 @@ import os,sys
 import numpy as np
 import pandas as pd
 import glob
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -22,6 +19,7 @@ def get_dataset_from_path(path,dataset):
     filepath = path+"/"+dataset+".npy"
     for f in glob.glob(filepath):
         df_ds = read_npy(f)
+        df_ds = filter(df_ds)
         df_all = pd.concat((df_all, df_ds))
         print("Appending data from ", f)
     return df_all
@@ -31,7 +29,8 @@ def filter(df):
     return df
 
 class MVASetup(object):
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
         self.category_labels = {}
         self.categories = []
         self.mva_models = []
@@ -53,7 +52,7 @@ class MVASetup(object):
         print("Adding model: {0}".format(model.name))
         self.mva_models.append(model)
 
-    def load_as_category(self, path, ds, category):
+    def load_as_category(self, path, ds, category, wgt, use_for_training):
         # categories should be enumerated from 0 to num.cat. - 1
         # 0, 1 for binary classification
         if category not in self.categories:
@@ -63,6 +62,8 @@ class MVASetup(object):
             self.df_dict[category] = pd.DataFrame()
         new_df = get_dataset_from_path(path, ds)
         new_df["category"] = category
+        new_df["training"] = use_for_training
+        new_df["wgt"] = wgt
         self.df_dict[category] = pd.concat((self.df_dict[category], new_df))
 
     def prepare_data(self, label, inputs):
@@ -71,9 +72,15 @@ class MVASetup(object):
                 print("Feature set {0}: variable {1} not in columns!".format(label, i))
                 sys.exit(1)
 
-        self.scalers[label] = StandardScaler().fit(self.x_train[inputs].values)
-        training_data = pd.DataFrame(columns=inputs, data=self.scalers[label].transform(self.x_train[inputs].values))
-        testing_data = pd.DataFrame(columns=inputs, data=self.scalers[label].transform(self.x_test[inputs].values))
+        x_mean = np.mean(self.x_train[inputs].values,axis=0)
+        x_std = np.std(self.x_train[inputs].values,axis=0)
+        training_data = (self.x_train[inputs]-x_mean)/x_std
+        testing_data = (self.x_test[inputs]-x_mean)/x_std
+        np.save("{0}/{1}_{2}_scalers".format(self.model_dir, self.name, label), [x_mean, x_std])
+
+#        self.scalers[label] = StandardScaler().fit(self.x_train[inputs].values)
+#        training_data = pd.DataFrame(columns=inputs, data=self.scalers[label].transform(self.x_train[inputs].values))
+#        testing_data = pd.DataFrame(columns=inputs, data=self.scalers[label].transform(self.x_test[inputs].values))
         return training_data, testing_data
 
     def train_models(self):
@@ -81,10 +88,18 @@ class MVASetup(object):
             print("Error: no input feature sets found!")
             sys.exit(1)
         self.df = pd.concat(self.df_dict.values())
-        self.df = filter(self.df) 
+
         self.df['resweight'] = 1/self.df['massErr_rel']
 
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(self.df.loc[:,self.df.columns!='category'], self.df["category"], train_size=0.6, test_size=0.4, shuffle=True)
+        
+        # Remove some samples from training 
+        train = self.x_train
+        train["category"] = self.y_train
+        train = train[train["training"]]
+        self.x_train = train.loc[:, train.columns!='category']
+        self.y_train = train['category']
+
 
         for feature_set_name, feature_set in self.feature_sets.items():
 
@@ -101,18 +116,9 @@ class MVASetup(object):
                     self.y_test = to_categorical(self.y_test, len(self.categories))
 
                 #model.train(training_data, self.y_train, feature_set_name)
-                model.train(training_data, self.y_train, feature_set_name, self.x_train['resweight'])
+                model.train(training_data, self.y_train, feature_set_name, self.model_dir, self.name,  self.x_train['resweight'])
 
-                self.roc_curves[model.name+"_"+feature_set_name] = roc_curve(self.y_test, model.predict(testing_data, self.y_test, feature_set_name))
+                roc = roc_curve(self.y_test, model.predict(testing_data, self.y_test, feature_set_name), sample_weight=self.x_test['wgt']*self.x_test["genweight"])
+                np.save("{0}/{1}_{2}_{3}_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
+                self.roc_curves[model.name+"_"+feature_set_name] = roc
                 
-    def plot_rocs(self, out_name):
-        plt.clf()
-        plt.plot([0, 1], [0, 1], 'k--')
-        for name, roc in self.roc_curves.items():
-            plt.plot(roc[0], roc[1], label=name) # [0]: fpr, [1]: tpr, [2]: threshold
-        plt.xlabel('False positive rate')
-        plt.ylabel('True positive rate')
-        plt.title('Test ROC curves')
-        plt.legend(loc='best')
-        plt.savefig("{0}/{1}".format(self.out_dir, out_name))
-        print("ROC curves are saved to {0}/{1}".format(self.out_dir, out_name))
