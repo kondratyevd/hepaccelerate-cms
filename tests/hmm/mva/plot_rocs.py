@@ -27,6 +27,10 @@ def plot_rocs(rocs, out_path):
 
 path = "tests/hmm/mva/performance/"
 
+run_options = ["run1", "run2", "run3", "run4", "run5", "run6"]
+var_options = ["V0", "V1", "V2", "V3"]
+mva_options = ["caltech_model", "tf_bdt", "tf_bdt_resweight"]
+
 rocs = {
     
     "ggH+VBF vs. DY+EWK": path+"run1_caltech_model_V0_roc.npy",

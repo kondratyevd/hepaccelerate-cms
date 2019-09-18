@@ -52,7 +52,7 @@ initialized_models = [
 #        KerasModel(name='model_purdue_old', arch=architectures['model_purdue_old'], batch_size=2048, epochs=20, loss='binary_crossentropy', optimizer='adam',binary=True),
         KerasModel(name='caltech_model', arch=architectures['caltech_model'], batch_size=2048, epochs=20, loss='binary_crossentropy', optimizer='adam',binary=True),
 #        SklearnBdtModel(name='simple_dt', max_depth=10, binary=True),
-#        TfBdtModel(name='tf_bdt', n_trees=800, max_depth=7, max_steps=500, batch_size=1024, tree_complexity=0.01, pruning='pre', lr=0.01, bpl=1),
+        TfBdtModel(name='tf_bdt', n_trees=800, max_depth=7, max_steps=500, batch_size=1024, tree_complexity=0.01, pruning='pre', lr=0.01, bpl=1),
         TfBdtModel(name='tf_bdt_resweight', n_trees=800, max_depth=7, max_steps=500, batch_size=1024, tree_complexity=0.01, pruning='pre', lr=0.01, bpl=1, weighted=True),
     ]
 
@@ -73,7 +73,7 @@ def run(run_label):
 
     mva_setup.add_feature_set("V0",caltech_vars)
     mva_setup.add_feature_set("V1",nodRs+["dEtaMin_mj", "dEtaMax_mj", "dPhiMin_mj", "dPhiMax_mj", "dEtaMin_mmj", "dEtaMax_mmj", "dPhiMin_mmj", "dPhiMax_mmj"])
-    mva_setup.add_feature_set("V2", caltech_vars+["massErr"])
+    mva_setup.add_feature_set("V2",caltech_vars+["massErr"])
     mva_setup.add_feature_set("V3",caltech_vars+["leadingJet_btag", "subleadingJet_btag"])
 
     for m in initialized_models:
@@ -84,3 +84,7 @@ def run(run_label):
 
 run("run1")
 run("run2")
+run("run3")
+run("run4")
+run("run5")
+run("run6")
