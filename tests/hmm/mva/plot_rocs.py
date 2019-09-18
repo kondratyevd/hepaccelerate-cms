@@ -1,3 +1,4 @@
+import os, sys
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -31,11 +32,19 @@ run_options = ["run1", "run2", "run3", "run4", "run5", "run6"]
 var_options = ["V0", "V1", "V2", "V3"]
 mva_options = ["caltech_model", "tf_bdt", "tf_bdt_resweight"]
 
-rocs = {
-    
-    "ggH+VBF vs. DY+EWK": path+"run1_caltech_model_V0_roc.npy",
-    "VBF vs. DY+EWK+ttbar": path+"run2_caltech_model_V0_roc.npy",
+rocs = {}
 
-}
+for run in run_options:
+    for var in var_options:
+        for mva in mva_options:
+            label = "{0}_{1}_{2}".format(run,mva,var)
+            roc_file = label+"_roc.npy"
+            roc_path = path+roc_file
+            if os.path.exists(roc_path):
+                rocs[label] = roc_path
+                print("Found ROC for {0}, adding".format(label))
+#            else:
+#                print("ROC for {0} doesn't exist, skipping".format(label))
+
 
 plot_rocs(rocs, path+"roc_test.png")

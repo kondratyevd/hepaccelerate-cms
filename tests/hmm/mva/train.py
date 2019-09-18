@@ -80,7 +80,7 @@ def run(run_label):
         mva_setup.load_model(m)
 
     mva_setup.train_models()
-
+    del mva_setup
 
 run("run1")
 run("run2")
