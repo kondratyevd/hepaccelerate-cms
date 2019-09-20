@@ -30,6 +30,8 @@ class LibHMuMu:
 
             void* new_hRelResolution(const char* path);
             void hRelResolution_eval(void* c, float* out_hres, int nev, float* mu1_pt, float* mu1_eta, float* mu2_pt, float* mu2_eta);
+            void* new_ZpTReweighting();
+            void ZpTReweighting_eval(void* c, float* out_zptw, int nev, float* pt, int itune);
         """)
         self.libhmm = self.ffi.dlopen(libpath)
 
@@ -53,6 +55,9 @@ class LibHMuMu:
 
         self.new_hRelResolution = self.libhmm.new_hRelResolution
         self.hRelResolution_eval = self.libhmm.hRelResolution_eval
+
+        self.new_ZpTReweighting = self.libhmm.new_ZpTReweighting
+        self.ZpTReweighting_eval = self.libhmm.ZpTReweighting_eval
 
     def cast_as(self, dtype_string, arr):
         return self.ffi.cast(dtype_string, arr.ctypes.data)
@@ -196,6 +201,22 @@ class hRelResolution:
             self.libhmm.cast_as("float *", mu2_eta),
         )
         return out_hres
+
+class ZpTReweighting:
+    def __init__(self, libhmm):
+        self.libhmm = libhmm
+        self.c_class = self.libhmm.new_ZpTReweighting()
+
+    def compute(self, pt, itune):
+        out_zptw = numpy_lib.ones_like(pt, dtype=numpy_lib.float32)
+        self.libhmm.ZpTReweighting_eval(
+            self.c_class,
+            self.libhmm.cast_as("float *", out_zptw),
+            len(out_zptw),
+            self.libhmm.cast_as("float *", pt),
+            itune,
+        )
+        return out_zptw
 
 class MiscVariables:
     def __init__(self, libhmm):
