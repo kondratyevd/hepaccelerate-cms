@@ -3,6 +3,10 @@ import numpy as np
 import pandas as pd
 import glob
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_curve
@@ -56,15 +60,33 @@ class MVASetup(object):
         # categories should be enumerated from 0 to num.cat. - 1
         # 0, 1 for binary classification
         if category not in self.categories:
-            cat_name = "({0})".format(self.category_labels[category]) if (category in self.category_labels.keys()) else ""
-            print("Added new category: {0} {1}".format(category, cat_name))
+            cat_name = "{0}".format(self.category_labels[category]) if (category in self.category_labels.keys()) else ""
+            print("Added new category: {0} ({1})".format(category, cat_name))
             self.categories.append(category)
             self.df_dict[category] = pd.DataFrame()
         new_df = get_dataset_from_path(path, ds)
         new_df["category"] = category
         new_df["training"] = use_for_training
         new_df["wgt"] = wgt
+        new_df = filter(new_df)
         self.df_dict[category] = pd.concat((self.df_dict[category], new_df))
+
+    def plot_hist(self, var_name, xlim=None):
+        self.df = pd.concat(self.df_dict.values())
+        self.df = filter(self.df)
+        print("Plotting "+var_name)
+        plt.clf()
+        ax = plt.gca()
+
+        for cat_num, cat_name in self.category_labels.items():
+            df_cat = self.df[self.df["category"]==cat_num]
+            ax.hist(df_cat[var_name].values, bins=40, histtype='step', label=cat_name,normed=True, range=xlim)
+        plt.xlabel(var_name)
+        plt.legend(loc='best')
+#        if xlim:
+#            plt.xlim(xlim)
+        plt.savefig("tests/hmm/mva/plots/{0}.png".format(var_name))
+
 
     def prepare_data(self, label, inputs):
         for i in inputs:
@@ -104,7 +126,8 @@ class MVASetup(object):
         for feature_set_name, feature_set in self.feature_sets.items():
 
             training_data, testing_data = self.prepare_data(feature_set_name, feature_set)
-
+#            print(training_data.columns)
+#            return
             for model in self.mva_models:
 
                 if model.binary:
