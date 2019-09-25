@@ -1,5 +1,6 @@
 #!/bin/bash
 
+MAX_JOBS=300
 queue=${1:-"cms"}
 perjob=${2:-20}
 
@@ -14,10 +15,16 @@ jobfiles_path="jobfiles"
 
 echo "Preparing job chunks"
 
-python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" > jobfiles_merged.txt
+python chunk_submits.py $perjob "$SUBMIT_DIR" "$jobfiles_path" "jobfiles.txt"> jobfiles_merged.txt
 
 #Split on line, not on space
 IFS=$'\n'
+
+njobs=$(wc -l jobfiles_merged.txt | awk '{ print $1 }')
+if [ $njobs -gt $MAX_JOBS ]; then
+    echo "You are trying to create $njobs jobs, and the threshold is $MAX_JOBS. To override this, change the value of  MAX_JOBS in submit_analyse.sh"
+    return
+fi
 
 for f in `cat jobfiles_merged.txt`; do
     rm analyze_.sub

@@ -15,6 +15,7 @@ class LibHMuMu:
 
             void* new_LeptonEfficiencyCorrector(int n, const char** file, const char** histo, float* weights);
             void LeptonEfficiencyCorrector_getSF(void* c, float* out, int n, int* pdgid, float* pt, float* eta);
+            void LeptonEfficiencyCorrector_getSFErr(void* c, float* out, int n, int* pdgid, float* pt, float* eta);
 
             const void* new_gbr(const char* weightfile);
             int gbr_get_nvariables(const void* gbr);
@@ -24,6 +25,13 @@ class LibHMuMu:
             void csangles_eval(float* out_theta, float* out_phi, int nev, float* pt1, float* eta1, float* phi1, float* mass1, float* pt2, float* eta2, float* phi2, float* mass2, int* charges);
             void mllErr_eval(float* out_err, int nev, float* pt1, float* eta1, float* phi1, float* mass1, float* pt2, float* eta2, float* phi2, float* mass2, float* Err1, float* Err2);
 
+            void* new_NNLOPSReweighting(const char* path);
+            void NNLOPSReweighting_eval(void* c, int igen, float* out_nnlow, int nev, int* genNjets, float* genHiggs_pt);
+
+            void* new_hRelResolution(const char* path);
+            void hRelResolution_eval(void* c, float* out_hres, int nev, float* mu1_pt, float* mu1_eta, float* mu2_pt, float* mu2_eta);
+            void* new_ZpTReweighting();
+            void ZpTReweighting_eval(void* c, float* out_zptw, int nev, float* pt, int itune);
         """)
         self.libhmm = self.ffi.dlopen(libpath)
 
@@ -33,6 +41,7 @@ class LibHMuMu:
 
         self.new_LeptonEfficiencyCorrector = self.libhmm.new_LeptonEfficiencyCorrector
         self.LeptonEfficiencyCorrector_getSF = self.libhmm.LeptonEfficiencyCorrector_getSF
+        self.LeptonEfficiencyCorrector_getSFErr = self.libhmm.LeptonEfficiencyCorrector_getSFErr
 
         self.new_gbr = self.libhmm.new_gbr
         self.gbr_get_nvariables = self.libhmm.gbr_get_nvariables
@@ -40,6 +49,15 @@ class LibHMuMu:
 
         self.csangles_eval = self.libhmm.csangles_eval
         self.mllErr_eval   = self.libhmm.mllErr_eval
+
+        self.new_NNLOPSReweighting = self.libhmm.new_NNLOPSReweighting
+        self.NNLOPSReweighting_eval = self.libhmm.NNLOPSReweighting_eval
+
+        self.new_hRelResolution = self.libhmm.new_hRelResolution
+        self.hRelResolution_eval = self.libhmm.hRelResolution_eval
+
+        self.new_ZpTReweighting = self.libhmm.new_ZpTReweighting
+        self.ZpTReweighting_eval = self.libhmm.ZpTReweighting_eval
 
     def cast_as(self, dtype_string, arr):
         return self.ffi.cast(dtype_string, arr.ctypes.data)
@@ -103,6 +121,16 @@ class LeptonEfficiencyCorrections:
             self.libhmm.cast_as("float *", pts),
             self.libhmm.cast_as("float *", etas))
         return out
+    
+    def compute_error(self, pdgids, pts, etas):
+        out = numpy_lib.zeros_like(pts)
+        self.libhmm.LeptonEfficiencyCorrector_getSFErr(
+            self.c_class,
+            self.libhmm.cast_as("float *", out), len(out), #output
+            self.libhmm.cast_as("int *", pdgids),
+            self.libhmm.cast_as("float *", pts),
+            self.libhmm.cast_as("float *", etas))
+        return out
 
 class GBREvaluator:
     def __init__(self, libhmm, weightfile):
@@ -124,6 +152,71 @@ class GBREvaluator:
 
     def get_bdt_nfeatures(self):
         return self.libhmm.gbr_get_nvariables(self.c_class)
+
+class NNLOPSReweighting:
+    def __init__(self, libhmm, path):
+        self.libhmm = libhmm
+        if not os.path.isfile(path):
+            raise FileNotFoundError("File {0} does not exist".format(path))
+        fi = uproot.open(path)
+      
+        file_C = libhmm.ffi.new("char[]", path.encode("ascii")) 
+        self.c_class = self.libhmm.new_NNLOPSReweighting(
+            file_C
+        )
+
+    def compute(self, genNjets, genHiggs_pt, igen):
+        out_nnlow = numpy_lib.ones_like(genNjets, dtype=numpy_lib.float32)
+        self.libhmm.NNLOPSReweighting_eval(
+            self.c_class,
+            igen,
+            self.libhmm.cast_as("float *", out_nnlow), 
+            len(out_nnlow),
+            self.libhmm.cast_as("int *", genNjets), 
+            self.libhmm.cast_as("float *", genHiggs_pt),  
+        )
+        return out_nnlow
+
+class hRelResolution:
+    def __init__(self, libhmm, path):
+        self.libhmm = libhmm
+        if not os.path.isfile(path):
+            raise FileNotFoundError("File {0} does not exist".format(path))
+        fi = uproot.open(path)
+        print(path)
+        file_C = libhmm.ffi.new("char[]", path.encode("ascii"))
+        self.c_class = self.libhmm.new_hRelResolution(
+            file_C
+        )
+
+    def compute(self, mu1_pt, mu1_eta, mu2_pt, mu2_eta):
+        out_hres = numpy_lib.ones_like(mu1_pt, dtype=numpy_lib.float32)
+        self.libhmm.hRelResolution_eval(
+            self.c_class,
+            self.libhmm.cast_as("float *", out_hres),
+            len(out_hres),
+            self.libhmm.cast_as("float *", mu1_pt),
+            self.libhmm.cast_as("float *", mu1_eta),
+            self.libhmm.cast_as("float *", mu2_pt),
+            self.libhmm.cast_as("float *", mu2_eta),
+        )
+        return out_hres
+
+class ZpTReweighting:
+    def __init__(self, libhmm):
+        self.libhmm = libhmm
+        self.c_class = self.libhmm.new_ZpTReweighting()
+
+    def compute(self, pt, itune):
+        out_zptw = numpy_lib.ones_like(pt, dtype=numpy_lib.float32)
+        self.libhmm.ZpTReweighting_eval(
+            self.c_class,
+            self.libhmm.cast_as("float *", out_zptw),
+            len(out_zptw),
+            self.libhmm.cast_as("float *", pt),
+            itune,
+        )
+        return out_zptw
 
 class MiscVariables:
     def __init__(self, libhmm):

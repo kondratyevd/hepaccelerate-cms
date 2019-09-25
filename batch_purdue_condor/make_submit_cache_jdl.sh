@@ -21,7 +21,7 @@ cat cache.jdl > submit_cache.jdl
 #Split on line, not on space
 IFS=$'\n'
 for f in `cat jobfiles_merged.txt`; do
-    echo "Arguments = "$f >> submit_cache.jdl
+    echo "Arguments = --jobfiles "$f >> submit_cache.jdl
     echo "Queue" >> submit_cache.jdl
     echo >> submit_cache.jdl
 done

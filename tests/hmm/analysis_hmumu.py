@@ -130,6 +130,7 @@ class JetMetCorrections:
             self.jersf = JetResolutionScaleFactor(**{name: evaluator[name] for name in jersf_names})
 
         junc_names = ['{0}_Uncertainty_AK4PFchs'.format(jec_tag)]
+
         #levels = []
         if do_factorized_jec:
             for name in dir(evaluator):
@@ -267,8 +268,8 @@ class AnalysisCorrections:
                         "RunE": "Fall17_17Nov2017DE_V32_DATA",
                         "RunF": "Fall17_17Nov2017F_V32_DATA",
                     },
-                    #jer_tag="Fall17_V3_MC",
-                    jer_tag=None,
+                    jer_tag="Fall17_V3_MC",
+                    #jer_tag=None,
                     jmr_vals=[1.09, 1.14, 1.04],
                     do_factorized_jec=True),
             },
@@ -282,8 +283,8 @@ class AnalysisCorrections:
                         "RunC": "Autumn18_RunC_V8_DATA",
                         "RunD": "Autumn18_RunD_V8_DATA",
                     },
-                    #jer_tag="Fall17_V3_MC",
-                    jer_tag=None,
+                    jer_tag="Fall17_V3_MC",
+                    #jer_tag=None,
                     jmr_vals=[1.0, 1.2, 0.8],
                     do_factorized_jec=True),
                 "Autumn18_V16":

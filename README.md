@@ -9,6 +9,8 @@ CMS-specific accelerated analysis code based on the [hepaccelerate](https://gith
 #Installation
 pip3 install --user scipy awkward uproot numba cffi lz4 cloudpickle pyyaml pylzma pandas
 pip3.6 install --user backports.lzma
+pip3.6 install --user scikit-learn==0.21.3
+pip3.6 install --upgrade --user tensorflow==1.14.0
 
 source /cvmfs/cms.cern.ch/cmsset_default.sh
 mkdir ~/hepaccelerate/
@@ -42,27 +44,62 @@ Run the framework locally:
 . tests/hmm/plots.sh out/
 ~~~
 
-How to submit analysis jobs:
+How to submit jobs:
 ===
-(the scripts for caching stage will be ready soon...)
 
-The input and output directories are defined in `hmm_analyze.py`.
-
-The submission script `submit_analyze.sh` can be ran with two arguments, for example `. submit_analyze.sh cms 20`.
+The submission scripts `submit_cache.sh` and `submit_analyze.sh` can be ran with two arguments, for example `. submit_analyze.sh cms 20`.
 The first argument is the name of PBS queue ("cms" by default), and the second argument is number of chunks per job (20 by default).
 
 Full analysis (2016+17+18) contains about 4000 chunks, so by default ~200 jobs will be created.
 
+Run these commands from Hammer frontend (hammer.rcac.purdue.edu):
 
-Run these commands from	Hammer frontend (hammer.rcac.purdue.edu):
+Stage 1: caching
+---
+
+Cache is not meant to be produced frequently; reproducing it takes a lot of time and storage space. 
+Please proceed to the next stage, unless you are confident that you need to reproduce the cache.
+
+We currently store cache at `/depot/cms/hmm/cache/`, it is available for all members of the group.
 
 ~~~
-cd batch_purdue_pbs
+# The input and output directories are defined in `hmm_cache.py`
 
-# Set up VOMS proxy
+cd batch_purdue_pbs
+mkdir logs
 . setup_proxy.sh
 
-# Submit PBS jobs
+. submit_cache.sh
+# wait for completion..
+~~~
+Once the jobs are completed, check how many failed:
+~~~
+python3 find_failed.py
+
+# If any files in cache are missing, resubmit the jobs for the corresponding datasets:
+
+. resubmit_cache.sh
+~~~
+*Hint:* depending on how many chunks are missing from the output, you may want to set different number of chunks per job for resubmission for faster processing (default is 20). 
+For example, if 200 chunks are missing, you can run   
+`. resubmit_cache.sh cms 1`    
+to submit 200 small jobs (instead of 10 bigger jobs submitted by default). 
+
+Repeat resubmision as many times as needed, and wait for all jobs to finish...
+
+~~~
+cp jobfiles.json /path/to/cache/
+~~~
+
+Stage 2 & 3: analysis, plots and datacards 
+---
+
+~~~
+# The input and output directories are defined in `hmm_analyze.py`
+
+cd batch_purdue_pbs
+mkdir logs
+
 . submit_analyze.sh
 # wait for completion..
 
@@ -76,6 +113,12 @@ Best results can be had if the CMS data is stored locally on a filesystem (few T
 
 A prebuilt singularity image with the GPU libraries is also provided: [link](http://login-1.hep.caltech.edu/~jpata/cupy.simg)
 
+
+# Contributing
+If you use this code, we are happy to consider issues and merge improvements.
+- Please make an issue on the Issues page for any bugs you find.
+- To contribute changes, please use the 'Fork and Pull' model: https://reflectoring.io/github-fork-and-pull.
+- For non-trivial pull requests, please ask at least one other person with push access to review the changes.
 
 ## Installation on Caltech T2 or GPU machine
 

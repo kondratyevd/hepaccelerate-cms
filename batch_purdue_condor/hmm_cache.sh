@@ -1,8 +1,6 @@
 #!/bin/bash
 
-hostname
 set -e
-env
 
 #Set some default arguments
 export NTHREADS=24
@@ -13,7 +11,7 @@ export NUMBA_NUM_THREADS=$NTHREADS
 export OMP_NUM_THREADS=$NTHREADS
 
 #This is where the skim files are loaded form
-export CACHE_PATH=/depot/cms/hmm/cache/
+export CACHE_PATH=/depot/cms/hmm/cache_test_condor/
 
 #Local output directory in worker node tmp
 export OUTDIR=/depot/cms/hmm/out_$USER/
@@ -30,6 +28,7 @@ python3 tests/hmm/analysis_hmumu.py \
     --datapath /mnt/hadoop/ \
     --maxchunks -1 --chunksize 1 \
     --out $OUTDIR\
+    --jobfiles "$@"\
     --era 2016 --era 2017 --era 2018
 
 echo "job done"
