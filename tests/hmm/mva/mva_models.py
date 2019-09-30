@@ -46,7 +46,15 @@ class KerasModel(MVAModel):
         self.model[feature_set_name].save('{0}/{1}_{2}.h5'.format(model_dir, prefix, label))
 
     def predict(self, x_test, y_test, feature_set_name):
-        return self.model[feature_set_name].predict(x_test).ravel()
+        if self.binary:
+            return self.model[feature_set_name].predict(x_test).ravel()
+        else:
+            vbf_pred = self.model[feature_set_name].predict(x_test)[:,0].ravel()
+            ggh_pred = self.model[feature_set_name].predict(x_test)[:,1].ravel()
+            dy_pred = self.model[feature_set_name].predict(x_test)[:,2].ravel()
+            ewk_pred = self.model[feature_set_name].predict(x_test)[:,3].ravel()
+            ttbar_pred = self.model[feature_set_name].predict(x_test)[:,4].ravel()
+            return [vbf_pred, ggh_pred, dy_pred, ewk_pred, ttbar_pred]
 
 
 class SklearnBdtModel(MVAModel):
