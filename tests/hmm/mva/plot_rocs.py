@@ -10,8 +10,12 @@ def plot_rocs(rocs, out_path, title=""):
     plt.clf()
 #    plt.plot([0, 1], [0, 1], 'k--')
     for name, path in rocs.items():
-        roc = np.load(path)
-        plt.plot(roc[1], roc[0], label=name) # [0]: fpr, [1]: tpr, [2]: threshold
+        try: 
+            roc = np.load(path)
+            plt.plot(roc[1], roc[0], label=name) # [0]: fpr, [1]: tpr, [2]: threshold
+        except:
+            pass
+
     plt.title(title)
     plt.xlabel('Signal efficiency')
     plt.ylabel('Bkg efficiency')
@@ -25,6 +29,12 @@ def plot_rocs(rocs, out_path, title=""):
     plt.xlim(0, 0.2)
     plt.ylim(0.0001, 0.01)
     plt.savefig(out_path)
+
+#    plt.yscale("linear")
+    plt.xlim(0.8, 0.95)
+    plt.ylim(0.1, 0.3)
+    plt.savefig(out_path.replace(".png", "_zoom.png"))
+
     print("ROC curves are saved to {0}".format(out_path))
 
 path = "tests/hmm/mva/performance/"
@@ -73,14 +83,36 @@ rocs = {
 #    "0.6": path+"multirun1_caltech_multi_V0_roc3.npy",
 #    "0.8": path+"multirun1_caltech_multi_V0_roc4.npy",
 #    "1": path+"multirun1_caltech_multi_V0_roc5.npy",
+
 #    "V0 (baseline)" : path+"longrun3_caltech_model_V0_roc.npy",
 #    "V5 (V0+singleMu+massErr+DeepB; dR->dEta,dPhi)" : path+"longrun3_caltech_model_V5_roc.npy",
-#    "V6 (V5 w/o mj, mmj angles)" : path+"longrun3_caltech_model_V6_roc.npy",
+#    "V6 (V0+singleMu+massErr; remove dR)" : path+"longrun3_caltech_model_V6_roc.npy",
 #    "V7 (V6 w/o dimuon kinematics)" : path+"longrun3_caltech_model_V7_roc.npy",
 
-    "V0, ggH+VBF vs. DY+EWK" : path+"longrun3_caltech_model_V0_roc.npy",
-    "V6, VBF vs. DY+EWK" : path+"longrun3_caltech_model_V6_roc.npy",
+#    "V0, VBF+ggH vs. DY+EWK" : path+"longrun1_caltech_model_V0_roc.npy",
+#    "V6, VBF vs. DY+EWK" : path+"longrun3_caltech_model_V6_roc.npy",
 
+#    "V0, binary" : path+"longrun3_caltech_model_V0_roc.npy",
+    "V6, binary" : path+"longrun3_caltech_model_V6_roc.npy",
+#    "V0, multi" : path_multi+"multirun3_caltech_multi_V0_roc.npy",
+#    "V5, multi" : path_multi+"multirun3_caltech_multi_V5_roc.npy",
+    "V6, multi" : path_multi+"multirun3_caltech_multi_V6_roc.npy",
+#    "V7. multi" : path_multi+"multirun3_caltech_multi_V7_roc.npy",
+
+#    "V0, multi VBF-EWK" : path_multi+"multirun3_caltech_multi_V0_vbf-ewk_roc.npy",
+#    "V6, multi VBF-EWK" : path_multi+"multirun3_caltech_multi_V6_vbf-ewk_roc.npy",
+
+#    "V0, multi VBF; EWK<0.9" : path_multi+"multirun3_caltech_multi_V0_ewk<09_roc.npy",
+    "V6, multi; EWK<0.9" : path_multi+"multirun3_caltech_multi_V6_ewk<09_roc.npy",
+
+#    "V0, multi VBF; EWK<0.8" : path_multi+"multirun3_caltech_multi_V0_ewk<08_roc.npy",
+    "V6, multi; EWK<0.8" : path_multi+"multirun3_caltech_multi_V6_ewk<08_roc.npy",
+
+#    "V0, multi VBF; EWK<0.7" : path_multi+"multirun3_caltech_multi_V0_ewk<07_roc.npy",
+    "V6, multi; EWK<0.7" : path_multi+"multirun3_caltech_multi_V6_ewk<07_roc.npy",
+
+#    "V0, multi VBF; EWK<0.6" : path_multi+"multirun3_caltech_multi_V0_ewk<06_roc.npy",
+    "V6, multi; EWK<0.6" : path_multi+"multirun3_caltech_multi_V6_ewk<06_roc.npy",
 
 #    "baseline+singleMu+massErr+DeepB" : path+"longrun2_reduced_caltech_model_V5_roc.npy",
 #    "binaryV0" : path+"longrun2_caltech_model_V0_roc.npy",
@@ -107,4 +139,5 @@ rocs = {
 #plot_rocs(rocs, path+"roc_{0}_gghandttbar.png".format(lbl))
 #plot_rocs(rocs, plot_path+"roc_baseline.png")
 #plot_rocs(rocs, plot_path+"roc_V567.png", "Training samples: VBF vs. DY+EWK")
-plot_rocs(rocs, plot_path+"roc_progress.png")
+plot_rocs(rocs, plot_path+"roc_multi.png","Training samples: VBF vs. DY+EWK")
+#plot_rocs(rocs, plot_path+"roc_progress.png")

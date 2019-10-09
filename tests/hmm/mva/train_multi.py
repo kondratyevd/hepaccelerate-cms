@@ -46,9 +46,9 @@ training_samples = {
 }
 
 testing_samples = {
-    "multirun1": ["ggh_amcPS", "vbf", "vbf_powheg", "dy_m105_160_amc", "dy_m105_160_vbf_amc", "ewk_lljj_mll105_160"],
+    "multirun1": ["ggh_amcPS", "vbf", "vbf_powheg", "dy_m105_160_amc", "dy_m105_160_vbf_amc", "ewk_lljj_mll105_160", "ttjets_sl", "ttjets_dl"],
     "multirun2": ["ggh_amcPS", "vbf", "vbf_powheg", "dy_m105_160_amc", "dy_m105_160_vbf_amc", "ewk_lljj_mll105_160", "ttjets_sl", "ttjets_dl"],
-    "multirun3": ["vbf", "vbf_powheg", "dy_m105_160_amc", "dy_m105_160_vbf_amc", "ewk_lljj_mll105_160"],
+    "multirun3": ["ggh_amcPS", "vbf", "vbf_powheg", "dy_m105_160_amc", "dy_m105_160_vbf_amc", "ewk_lljj_mll105_160", "ttjets_sl", "ttjets_dl"],
 }
 
 caltech_vars = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
@@ -58,13 +58,24 @@ nodRs = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmj
                 'leadingJet_eta', 'subleadingJet_eta', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
                         'softJet5', 'Higgs_pt', 'Higgs_eta', 'Higgs_mass']
 
-v6 = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
+v5 = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
                 'leadingJet_eta', 'subleadingJet_eta', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
                 'softJet5', 'Higgs_pt', 'Higgs_eta', 'Higgs_mass', "massErr_rel", "leadingJet_btag", "subleadingJet_btag", "leading_muon_pt", "leading_muon_eta",
+                "leading_muon_phi", "subleading_muon_pt", "subleading_muon_eta", "subleading_muon_phi", "dEtaMin_mj", "dEtaMax_mj", "dPhiMin_mj", "dPhiMax_mj",
+                "dEtaMin_mmj", "dEtaMax_mmj", "dPhiMin_mmj", "dPhiMax_mmj"]
+
+v6 = ['dEtamm', 'dPhimm', 'dRmm', 'M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
+                'leadingJet_eta', 'subleadingJet_eta', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
+                'softJet5', 'Higgs_pt', 'Higgs_eta', 'Higgs_mass', "massErr_rel", "leading_muon_pt", "leading_muon_eta",
+            "leading_muon_phi", "subleading_muon_pt", "subleading_muon_eta", "subleading_muon_phi"]
+
+v7 = ['M_jj', 'pt_jj', 'eta_jj', 'phi_jj', 'M_mmjj', 'eta_mmjj', 'phi_mmjj', 'dEta_jj', 'leadingJet_pt', 'subleadingJet_pt',
+        'leadingJet_eta', 'subleadingJet_eta', 'Zep',  'leadingJet_qgl', 'subleadingJet_qgl', 'cthetaCS',
+                'softJet5', 'Higgs_mass', "massErr_rel", "leading_muon_pt", "leading_muon_eta",
             "leading_muon_phi", "subleading_muon_pt", "subleading_muon_eta", "subleading_muon_phi"]
 
 initialized_models = [
-        KerasModel(name='caltech_multi', arch=architectures['caltech_multi'], batch_size=2048, epochs=20, loss='categorical_crossentropy', optimizer='adam',binary=False),
+        KerasModel(name='caltech_multi', arch=architectures['caltech_multi'], batch_size=2048, epochs=200, loss='categorical_crossentropy', optimizer='adam',binary=False),
 #        KerasModel(name='caltech_multi', arch=architectures['caltech_multi'], batch_size=2048, epochs=2, loss='categorical_crossentropy', optimizer='adam',binary=False),
     ]
 
@@ -76,6 +87,7 @@ def run(run_label):
     mva_setup.out_dir = "tests/hmm/mva/performance_multi/"
     mva_setup.model_dir = "tests/hmm/mva/trained_models/"
     mva_setup.category_labels = {0: "VBF", 1: "ggH", 2: "DY", 3: "EWK", 4: "ttbar"}
+    mva_setup.load_categories()
 
     for i in input_list:
     #    cat = 1 if i.isSignal else 0
@@ -95,6 +107,8 @@ def run(run_label):
 
     mva_setup.add_feature_set("V0",caltech_vars)
     mva_setup.add_feature_set("V6", v6)
+#    mva_setup.add_feature_set("V5", v5)
+#    mva_setup.add_feature_set("V7", v7)
     #mva_setup.add_feature_set("V1",nodRs+["dEtaMin_mj", "dEtaMax_mj", "dPhiMin_mj", "dPhiMax_mj", "dEtaMin_mmj", "dEtaMax_mmj", "dPhiMin_mmj", "dPhiMax_mmj"])
     #mva_setup.add_feature_set("V2",caltech_vars+["massErr_rel"])
     #mva_setup.add_feature_set("V3",caltech_vars+["leadingJet_btag", "subleadingJet_btag"])

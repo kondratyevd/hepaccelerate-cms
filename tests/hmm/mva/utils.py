@@ -48,6 +48,7 @@ class MVASetup(object):
         self.inputs = []
         self.out_dir = ""
         self.model_dir = ""
+        self.converted_to_cat = False
         os.system("mkdir -p "+self.out_dir)
         os.system("mkdir -p "+self.model_dir)
 
@@ -57,6 +58,11 @@ class MVASetup(object):
     def load_model(self, model):
         print("Adding model: {0}".format(model.name))
         self.mva_models.append(model)
+
+    def load_categories(self):
+        for k,v in self.category_labels.items():
+            self.categories.append(k)
+            self.df_dict[k] = pd.DataFrame()
 
     def load_as_category(self, path, ds, category, wgt, only_train, only_test, both):
         # categories should be enumerated from 0 to num.cat. - 1
@@ -165,12 +171,12 @@ class MVASetup(object):
                     if len(self.categories) is not 2:
                         print("Can't perform binary classification with {0} categories!".format(len(self.categories)))
                         sys.exit(1)
-                else:
+                elif not self.converted_to_cat:
                     self.y_train = to_categorical(self.y_train, len(self.categories))
                     y_test = self.y_test
                     self.y_test = to_categorical(self.y_test, len(self.categories))
                     print(self.y_train)
-
+                    self.converted_to_cat = True
 
                 model.train(training_data, self.y_train, feature_set_name, self.model_dir, self.name,  self.x_train['resweight'])
 
@@ -184,25 +190,28 @@ class MVASetup(object):
                     self.plot_hist("dnn_score_{0}_{1}_{2}".format(self.name, model.name, feature_set_name), df=testing_data, values=prediction)
                     np.save("{0}/{1}_{2}_{3}_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
                     self.roc_curves[model.name+"_"+feature_set_name] = roc
+
                 elif simple:
-#                    cuts = np.logical_and(prediction[3]<0.9, prediction[2]<0.9)
-#                    cuts = (prediction[3]<0.9)
+
                     vbf_pred = prediction[0]
                     ggh_pred = prediction[1]
                     dy_pred = prediction[2]
                     ewk_pred = prediction[3]
-#                    self.x_test = self.x_test[cuts]
-#                    self.y_test = self.y_test[cuts]
-#                    vbf_pred = vbf_pred[cuts]
-#                    ggh_pred = ggh_pred[cuts]
-#                    dy_pred = dy_pred[cuts]
-#                    ewk_pred = ewk_pred[cuts]
+
+                    cuts = (ewk_pred<0.7)
+                    self.x_test = self.x_test[cuts]
+                    self.y_test = self.y_test[cuts]
+                    vbf_pred = vbf_pred[cuts]
+                    ggh_pred = ggh_pred[cuts]
+                    dy_pred = dy_pred[cuts]
+                    ewk_pred = ewk_pred[cuts]
                     pred = vbf_pred
 #                    pred = np.sum([vbf_pred,ggh_pred], axis=0)
-#                    pred = np.sum([vbf_pred,ggh_pred, (-1)*dy_pred, (-1)*ewk_pred], axis=0)
+#                    pred = np.sum([vbf_pred, (-1)*ewk_pred], axis=0)
                     roc = roc_curve(np.logical_or(self.y_test[:,0], self.y_test[:,1]), pred, sample_weight=self.x_test['wgt']*self.x_test["genweight"])
-                    np.save("{0}/{1}_{2}_{3}_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
-
+#                    np.save("{0}/{1}_{2}_{3}_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
+#                    np.save("{0}/{1}_{2}_{3}_vbf-ewk_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
+                    np.save("{0}/{1}_{2}_{3}_ewk<07_roc".format(self.out_dir, self.name,  model.name, feature_set_name), roc)
 #                    testing_data["category"]=y_test                
 #                    self.plot_hist("vbf_score_{0}_{1}_{2}".format(self.name, model.name, feature_set_name), df=testing_data, values=prediction[0])
 #                    self.plot_hist("ggh_score_{0}_{1}_{2}".format(self.name, model.name, feature_set_name), df=testing_data, values=prediction[1])
