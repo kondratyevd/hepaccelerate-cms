@@ -47,7 +47,10 @@ class KerasModel(MVAModel):
 
     def predict(self, x_test, y_test, feature_set_name):
         if self.binary:
-            return self.model[feature_set_name].predict(x_test).ravel()
+            if "resweights" in self.name:
+                return self.model[feature_set_name].predict(x_test)[:,0].ravel()
+            else:
+                return self.model[feature_set_name].predict(x_test).ravel()
         else:
             vbf_pred = self.model[feature_set_name].predict(x_test)[:,0].ravel()
             ggh_pred = self.model[feature_set_name].predict(x_test)[:,1].ravel()
