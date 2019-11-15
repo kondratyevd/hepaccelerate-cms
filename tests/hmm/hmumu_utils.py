@@ -1529,8 +1529,8 @@ def get_puid_weights(jets, passed_puid, evaluator, era, wp):
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], jets.pt, jets.eta)
     p_puid_mc = NUMPY_LIB.zeros(nev)
     p_puid_data = NUMPY_LIB.zeros(nev)
-    compute_eff_product(jets.offsets, passed_puid, jets_pu_eff, p_puid_mc)
-    compute_eff_product(jets.offsets, passed_puid, jets_pu_eff*jets_pu_sf, p_puid_data)
+    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff, p_puid_mc)
+    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff*jets_pu_sf, p_puid_data)
     eventweight_puid = np.divide(p_puid_data, p_puid_mc, out=np.zeros_like(p_puid_data), where=p_puid_mc!=0)
     return eventweight_puid
 
@@ -1542,17 +1542,18 @@ def jet_puid_evaluate(evaluator, era, wp, jet_pt, jet_eta):
     return puid_eff, puid_sf
 
 @numba.njit(parallel=True)
-def compute_eff_product(offsets, jets_mask_passes_id, jets_eff, out_proba):
+def compute_eff_product(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba):
     #loop over events in parallel
     for iev in numba.prange(len(offsets)-1):
         p_tot = 1.0
         #loop over jets in event
         for ij in range(offsets[iev], offsets[iev+1]):
-            this_jet_passes = jets_mask_passes_id[ij]
-            if this_jet_passes:
-                p_tot *= jets_eff[ij]
-            else:
-                p_tot *= 1.0 - jets_eff[ij]
+            if jet_pt[ij] < 50:
+                this_jet_passes = jets_mask_passes_id[ij]
+                if this_jet_passes:
+                    p_tot *= jets_eff[ij]
+                else:
+                    p_tot *= 1.0 - jets_eff[ij]
         out_proba[iev] = p_tot
 
 def get_selected_electrons(electrons, pt_cut, eta_cut, id_type):
