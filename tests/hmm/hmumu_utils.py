@@ -324,7 +324,7 @@ def analyze_data(
     jets_passing_id = jets.select_objects(selected_jets_id)
 
     if (parameters["jet_puid"] is not "none") and is_mc:
-        puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"])
+        puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_puid_pt_max"])
         weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}
 
     #compute variated weights here to ensure the nominal weight contains all possible other weights  
@@ -1525,14 +1525,14 @@ def get_selected_jets(
     return ret
 
 
-def get_puid_weights(jets, passed_puid, evaluator, era, wp):
+def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max):
     nev = jets.numevents()
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], jets.pt, jets.eta)
     p_puid_mc = NUMPY_LIB.zeros(nev)
     p_puid_data = NUMPY_LIB.zeros(nev)
-    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff, p_puid_mc)
-    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff*jets_pu_sf, p_puid_data)
+    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff, p_puid_mc, jet_pt_max)
+    compute_eff_product(jets.offsets, jets.pt, passed_puid, jets_pu_eff*jets_pu_sf, p_puid_data, jet_pt_max)
     eventweight_puid = np.divide(p_puid_data, p_puid_mc, out=np.zeros_like(p_puid_data), where=p_puid_mc!=0)
     return eventweight_puid
 
@@ -1544,13 +1544,13 @@ def jet_puid_evaluate(evaluator, era, wp, jet_pt, jet_eta):
     return puid_eff, puid_sf
 
 @numba.njit(parallel=True)
-def compute_eff_product(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba):
+def compute_eff_product(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba, jet_pt_max):
     #loop over events in parallel
     for iev in numba.prange(len(offsets)-1):
         p_tot = 1.0
         #loop over jets in event
         for ij in range(offsets[iev], offsets[iev+1]):
-            if jet_pt[ij] < 50:
+            if jet_pt[ij] < jet_pt_max:
                 this_jet_passes = jets_mask_passes_id[ij]
                 if this_jet_passes:
                     p_tot *= jets_eff[ij]
