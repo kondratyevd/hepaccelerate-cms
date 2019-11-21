@@ -332,7 +332,7 @@ def analyze_data(
 
     # PU ID weights are only applied to 2016 so far, as they haven't been validated for 2017/18
     # https://github.com/jpata/hepaccelerate-cms/pull/66
-    if (parameters["jet_puid"] is not "none") and is_mc and (dataset_era == "2016"):
+    if (parameters["jet_puid"] is not "none") and is_mc:
         puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_puid_pt_max"], use_cuda)
         weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}
 
@@ -555,7 +555,7 @@ def analyze_data(
                     dnn_vars["m1_iso"] = weights_individual['mu1_iso']['nominal'][dnn_presel]
                     dnn_vars["m2_id"] = weights_individual['mu2_id']['nominal'][dnn_presel]
                     dnn_vars["m2_iso"] = weights_individual['mu2_iso']['nominal'][dnn_presel]
-                    if parameters["jet_puid"] is not "none" and (dataset_era == "2016"):
+                    if parameters["jet_puid"] is not "none":
                         dnn_vars["puid_weight"] = weights_individual['jet_puid']['nominal'][dnn_presel]
                 dnn_vars["j1_jetId"] = leading_jet["jetId"][dnn_presel]
                 dnn_vars["j1_puId"] = leading_jet["puId"][dnn_presel]
@@ -1643,6 +1643,11 @@ def get_selected_jets(
 
 def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max, use_cuda):
     nev = jets.numevents()
+
+    # PU ID weights haven't been validated for 2017/18 yet
+    if era!="2016":
+        return NUMPY_LIB.ones(nev, dtype=NUMPY_LIB.float32)
+
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], NUMPY_LIB.asnumpy(jets.pt), NUMPY_LIB.asnumpy(jets.eta))
     p_puid_mc = compute_eff_product(jets.offsets, NUMPY_LIB.asnumpy(jets.pt), passed_puid, jets_pu_eff, jet_pt_max, use_cuda)
