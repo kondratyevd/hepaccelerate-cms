@@ -1645,8 +1645,8 @@ def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max, use_cuda
     nev = jets.numevents()
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], NUMPY_LIB.asnumpy(jets.pt), NUMPY_LIB.asnumpy(jets.eta))
-    p_puid_mc = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff, jet_pt_max, use_cuda)
-    p_puid_data = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff*jets_pu_sf, jet_pt_max, use_cuda)
+    p_puid_mc = compute_eff_product(jets.offsets, NUMPY_LIB.asnumpy(jets.pt), passed_puid, jets_pu_eff, jet_pt_max, use_cuda)
+    p_puid_data = compute_eff_product(jets.offsets, NUMPY_LIB.asnumpy(jets.pt), passed_puid, jets_pu_eff*jets_pu_sf, jet_pt_max, use_cuda)
     eventweight_puid = NUMPY_LIB.divide(p_puid_data, p_puid_mc)
     eventweight_puid[p_puid_mc==0] = 0
     return eventweight_puid
@@ -1658,14 +1658,14 @@ def jet_puid_evaluate(evaluator, era, wp, jet_pt, jet_eta):
     puid_sf = evaluator[h_sf_name](jet_pt, jet_eta)
     return NUMPY_LIB.array(puid_eff), NUMPY_LIB.array(puid_sf)
 
-def compute_eff_product(offsets, jets_mask_passes_id, jets_eff, jet_pt_max, use_cuda):
+def compute_eff_product(offsets, jet_pt, jets_mask_passes_id, jets_eff, jet_pt_max, use_cuda):
     nev = len(offsets) - 1
     p_puid = NUMPY_LIB.zeros(nev, dtype=NUMPY_LIB.float32)
     if use_cuda:
-        compute_eff_product_cudakernel(offsets, jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
+        compute_eff_product_cudakernel(offsets, jet_pt,  jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
         cuda.synchronize()
     else:
-        compute_eff_product_cpu(offsets, jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
+        compute_eff_product_cpu(offsets, jet_pt, jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
     return p_puid
 
 @numba.njit(parallel=True)
@@ -1684,7 +1684,7 @@ def compute_eff_product_cpu(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_
         out_proba[iev] = p_tot
 
 @cuda.jit
-def compute_eff_product_cudakernel(offsets, jets_mask_passes_id, jets_eff, out_proba, jet_pt_max):
+def compute_eff_product_cudakernel(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba, jet_pt_max):
     xi = cuda.grid(1)
     xstride = cuda.gridsize(1)
     for iev in range(xi, offsets.shape[0]-1, xstride):
