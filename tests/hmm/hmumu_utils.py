@@ -323,7 +323,9 @@ def analyze_data(
     #Now we throw away all the jets that didn't pass the ID to save time on computing JECs on them
     jets_passing_id = jets.select_objects(selected_jets_id)
 
-    if (parameters["jet_puid"] is not "none") and is_mc:
+    # PU ID weights are only applied to 2016 so far, as they haven't been validated for 2017/18
+    # https://github.com/jpata/hepaccelerate-cms/pull/66
+    if (parameters["jet_puid"] is not "none") and is_mc and (dataset_era == "2016"):
         puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_puid_pt_max"])
         weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}
 
