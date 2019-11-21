@@ -1641,12 +1641,12 @@ def get_selected_jets(
     return ret
 
 
-def get_puid_weights(jets, passed_puid, evaluator, era, wp, use_cuda):
+def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max, use_cuda):
     nev = jets.numevents()
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], NUMPY_LIB.asnumpy(jets.pt), NUMPY_LIB.asnumpy(jets.eta))
-    p_puid_mc = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff, use_cuda)
-    p_puid_data = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff*jets_pu_sf, use_cuda)
+    p_puid_mc = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff, jet_pt_max, use_cuda)
+    p_puid_data = compute_eff_product(jets.offsets, passed_puid, jets_pu_eff*jets_pu_sf, jet_pt_max, use_cuda)
     eventweight_puid = NUMPY_LIB.divide(p_puid_data, p_puid_mc)
     eventweight_puid[p_puid_mc==0] = 0
     return eventweight_puid
