@@ -555,7 +555,7 @@ def analyze_data(
                     dnn_vars["m1_iso"] = weights_individual['mu1_iso']['nominal'][dnn_presel]
                     dnn_vars["m2_id"] = weights_individual['mu2_id']['nominal'][dnn_presel]
                     dnn_vars["m2_iso"] = weights_individual['mu2_iso']['nominal'][dnn_presel]
-                    if parameters["jet_puid"] is not "none":
+                    if parameters["jet_puid"] is not "none" and (dataset_era == "2016"):
                         dnn_vars["puid_weight"] = weights_individual['jet_puid']['nominal'][dnn_presel]
                 dnn_vars["j1_jetId"] = leading_jet["jetId"][dnn_presel]
                 dnn_vars["j1_puId"] = leading_jet["puId"][dnn_presel]
