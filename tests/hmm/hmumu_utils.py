@@ -334,7 +334,7 @@ def analyze_data(
     # https://github.com/jpata/hepaccelerate-cms/pull/66
     if (parameters["jet_puid"] is not "none") and is_mc and (dataset_era == "2016"):
         puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_puid_pt_max"], use_cuda)
-        weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}}
+        weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}
 
     #compute variated weights here to ensure the nominal weight contains all possible other weights  
     compute_event_weights(parameters, weights_individual, scalars,
