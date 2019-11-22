@@ -1696,7 +1696,7 @@ def compute_eff_product_cudakernel(offsets, jet_pt_mask, jets_mask_passes_id, je
     for iev in range(xi, offsets.shape[0]-1, xstride):
         p_tot = np.float32(1.0)
         #loop over jets in event
-        for ij in range(offsets[iev], offsets[iev+1])
+        for ij in range(offsets[iev], offsets[iev+1]):
             if not jet_pt_mask[ij]: continue
             this_jet_passes = jets_mask_passes_id[ij]
             if this_jet_passes:
