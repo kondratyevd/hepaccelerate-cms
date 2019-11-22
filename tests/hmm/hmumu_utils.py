@@ -333,7 +333,7 @@ def analyze_data(
     # PU ID weights are only applied to 2016 so far, as they haven't been validated for 2017/18
     # https://github.com/jpata/hepaccelerate-cms/pull/66
     if (parameters["jet_puid"] is not "none") and is_mc:
-        puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_puid_pt_max"], use_cuda)
+        puid_weights = get_puid_weights(jets_passing_id, passed_puid, puidreweighting, dataset_era, parameters["jet_puid"], parameters["jet_pt_subleading"][dataset_era], parameters["jet_puid_pt_max"], use_cuda)
         weights_individual["jet_puid"] = {"nominal": puid_weights, "up": puid_weights, "down": puid_weights}
 
     #compute variated weights here to ensure the nominal weight contains all possible other weights  
@@ -1641,7 +1641,7 @@ def get_selected_jets(
     return ret
 
 
-def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max, use_cuda):
+def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_min, jet_pt_max, use_cuda):
     nev = jets.numevents()
 
     # PU ID weights haven't been validated for 2017/18 yet
@@ -1650,8 +1650,9 @@ def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_max, use_cuda
 
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], NUMPY_LIB.asnumpy(jets.pt), NUMPY_LIB.asnumpy(jets.eta))
-    p_puid_mc = compute_eff_product(jets.offsets, NUMPY_LIB.asnumpy(jets.pt), passed_puid, jets_pu_eff, jet_pt_max, use_cuda)
-    p_puid_data = compute_eff_product(jets.offsets, NUMPY_LIB.asnumpy(jets.pt), passed_puid, jets_pu_eff*jets_pu_sf, jet_pt_max, use_cuda)
+    jet_pt_mask = (NUMPY_LIB.asnumpy(jets.pt)>jet_pt_min) and (NUMPY_LIB.asnumpy(jets.pt)<jet_pt_max)
+    p_puid_mc = compute_eff_product(jets.offsets, jet_pt_mask, passed_puid, jets_pu_eff, use_cuda)
+    p_puid_data = compute_eff_product(jets.offsets, jet_pt_mask, passed_puid, jets_pu_eff*jets_pu_sf, use_cuda)
     eventweight_puid = NUMPY_LIB.divide(p_puid_data, p_puid_mc)
     eventweight_puid[p_puid_mc==0] = 0
     return eventweight_puid
@@ -1663,45 +1664,43 @@ def jet_puid_evaluate(evaluator, era, wp, jet_pt, jet_eta):
     puid_sf = evaluator[h_sf_name](jet_pt, jet_eta)
     return NUMPY_LIB.array(puid_eff), NUMPY_LIB.array(puid_sf)
 
-def compute_eff_product(offsets, jet_pt, jets_mask_passes_id, jets_eff, jet_pt_max, use_cuda):
+def compute_eff_product(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff, use_cuda):
     nev = len(offsets) - 1
     p_puid = NUMPY_LIB.zeros(nev, dtype=NUMPY_LIB.float32)
     if use_cuda:
-        compute_eff_product_cudakernel(offsets, jet_pt,  jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
+        compute_eff_product_cudakernel(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff, p_puid)
         cuda.synchronize()
     else:
-        compute_eff_product_cpu(offsets, jet_pt, jets_mask_passes_id, jets_eff, p_puid, jet_pt_max)
+        compute_eff_product_cpu(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff, p_puid)
     return p_puid
 
 @numba.njit(parallel=True)
-def compute_eff_product_cpu(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba, jet_pt_max):
+def compute_eff_product_cpu(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff, out_proba):
     #loop over events in parallel
     for iev in numba.prange(len(offsets)-1):
         p_tot = 1.0
         #loop over jets in event
         for ij in range(offsets[iev], offsets[iev+1]):
-            if jet_pt[ij] < jet_pt_max:
-                this_jet_passes = jets_mask_passes_id[ij]
-                if this_jet_passes:
-                    p_tot *= jets_eff[ij]
-                else:
-                    p_tot *= 1.0 - jets_eff[ij]
+            this_jet_passes = jets_mask_passes_id[ij]
+            if this_jet_passes and jet_pt_mask:
+                p_tot *= jets_eff[ij]
+            elif !this_jet_passes and jet_pt_mask:
+                p_tot *= 1.0 - jets_eff[ij]
         out_proba[iev] = p_tot
 
 @cuda.jit
-def compute_eff_product_cudakernel(offsets, jet_pt, jets_mask_passes_id, jets_eff, out_proba, jet_pt_max):
+def compute_eff_product_cudakernel(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff, out_proba):
     xi = cuda.grid(1)
     xstride = cuda.gridsize(1)
     for iev in range(xi, offsets.shape[0]-1, xstride):
         p_tot = np.float32(1.0)
         #loop over jets in event
         for ij in range(offsets[iev], offsets[iev+1]):
-            if jet_pt[ij] < jet_pt_max:
-                this_jet_passes = jets_mask_passes_id[ij]
-                if this_jet_passes:
-                    p_tot *= jets_eff[ij]
-                else:
-                    p_tot *= 1.0 - jets_eff[ij]
+            this_jet_passes = jets_mask_passes_id[ij]
+            if this_jet_passes and jet_pt_mask:
+                p_tot *= jets_eff[ij]
+            elif !this_jet_passes and jet_pt_mask:
+                p_tot *= 1.0 - jets_eff[ij]
         out_proba[iev] = p_tot
 
 def get_selected_electrons(electrons, pt_cut, eta_cut, id_type):
