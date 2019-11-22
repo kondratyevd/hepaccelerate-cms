@@ -1681,10 +1681,11 @@ def compute_eff_product_cpu(offsets, jet_pt_mask, jets_mask_passes_id, jets_eff,
         p_tot = 1.0
         #loop over jets in event
         for ij in range(offsets[iev], offsets[iev+1]):
+            if not jet_pt_mask[ij]: continue
             this_jet_passes = jets_mask_passes_id[ij]
-            if this_jet_passes and jet_pt_mask:
+            if this_jet_passes:
                 p_tot *= jets_eff[ij]
-            elif (not this_jet_passes) and jet_pt_mask:
+            else:
                 p_tot *= 1.0 - jets_eff[ij]
         out_proba[iev] = p_tot
 
@@ -1695,11 +1696,12 @@ def compute_eff_product_cudakernel(offsets, jet_pt_mask, jets_mask_passes_id, je
     for iev in range(xi, offsets.shape[0]-1, xstride):
         p_tot = np.float32(1.0)
         #loop over jets in event
-        for ij in range(offsets[iev], offsets[iev+1]):
+        for ij in range(offsets[iev], offsets[iev+1])
+            if not jet_pt_mask[ij]: continue
             this_jet_passes = jets_mask_passes_id[ij]
-            if this_jet_passes and jet_pt_mask:
+            if this_jet_passes:
                 p_tot *= jets_eff[ij]
-            elif (not this_jet_passes) and jet_pt_mask:
+            else:
                 p_tot *= 1.0 - jets_eff[ij]
         out_proba[iev] = p_tot
 
