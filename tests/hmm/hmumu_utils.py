@@ -1650,7 +1650,7 @@ def get_puid_weights(jets, passed_puid, evaluator, era, wp, jet_pt_min, jet_pt_m
 
     wp_dict = {"loose": "L", "medium": "M", "tight": "T"}
     jets_pu_eff, jets_pu_sf = jet_puid_evaluate(evaluator, era, wp_dict[wp], NUMPY_LIB.asnumpy(jets.pt), NUMPY_LIB.asnumpy(jets.eta))
-    jet_pt_mask = (NUMPY_LIB.asnumpy(jets.pt)>jet_pt_min) and (NUMPY_LIB.asnumpy(jets.pt)<jet_pt_max)
+    jet_pt_mask = ((NUMPY_LIB.asnumpy(jets.pt)>jet_pt_min) & (NUMPY_LIB.asnumpy(jets.pt)<jet_pt_max))
     p_puid_mc = compute_eff_product(jets.offsets, jet_pt_mask, passed_puid, jets_pu_eff, use_cuda)
     p_puid_data = compute_eff_product(jets.offsets, jet_pt_mask, passed_puid, jets_pu_eff*jets_pu_sf, use_cuda)
     eventweight_puid = NUMPY_LIB.divide(p_puid_data, p_puid_mc)
